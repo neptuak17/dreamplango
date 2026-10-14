@@ -1,0 +1,740 @@
+# DreamPlanGo — System Design (V1 proposal)
+
+**Status:** Draft for review, 2026-10-14 (v2: decisions D1–D4 recorded). No code has been written yet.
+**Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports).
+
+---
+
+## 0. Summary of key decisions
+
+1. **Everything is measured along the route (linear referencing).** Every route becomes a measured line from km 0 to km N. Every fact about it becomes an *event* at a km point or over a km range: surface, traffic stress, signage, a campsite, a ferry season, a weather warning, a closure. Each event records its source, date, confidence and licence. Highway asset-management systems work the same way, and it's what lets you "decorate" a route with any data source you can map to a location.
+2. **Two runtimes share one data contract.**
+   - **Route Audit Engine:** Python, for the heavy batch geospatial work. It runs as a Docker image, which Cloudflare Containers (GA since April 2026) can also run.
+   - **Request-time API:** TypeScript on Hono. It runs on Node on your laptop today and on Cloudflare Workers later without a rewrite.
+   - **Prototype web app:** React and MapLibre.
+3. **Each audit run produces an immutable, versioned Audit Bundle.** The bundle holds SQLite, PMTiles, GPX, an HTML/PDF report and a manifest. The API serves it, the prototype reads it, the iOS app will download it as its offline pack, and B2B reports are rendered from it.
+4. **The audit rules follow the EuroVelo European Certification Standard (ECS).** They use the same section units (1 km minor sections, 15–90 km daily sections), the same criteria categories, and the same essential / important / additional tiers. That makes the results credible to ECF and the National EuroVelo Coordination Centres (NECCs). It also means we can calibrate against published ECS certification reports, such as EV15 Rhine (2025).
+5. **Open data comes first.** The main sources are:
+   - EuroVelo GPX tracks, which have been under ODbL since October 2024.
+   - OpenStreetMap.
+   - Overture Maps and Foursquare open places.
+   - Copernicus: elevation (DEM), ERA5 climate, CAMS air quality and EFFIS fire.
+   - MeteoAlarm warnings, NASA FIRMS fire hotspots and GTFS transit feeds.
+
+   Commercial services are used only where open data is weak, or where licences require them for production (mainly weather).
+6. **A consumer app with no accounts is feasible** (section 9). The rule is "the server knows routes; the device knows the rider." Purchases go through StoreKit 2 and sync through the user's own iCloud. GPS location never leaves the phone, and live data is requested by route block, not by position.
+7. **Work inside WSL2 (Ubuntu, arm64) on the Windows on ARM laptop.** The Python geospatial stack (GDAL, rasterio, pyosmium, DuckDB spatial) works reliably on Linux arm64. On native Windows-on-ARM it is patchy.
+
+### Decision log
+
+| # | Date | Decision |
+|---|---|---|
+| D1 | 2026-10-14 | **Dev machine: 32 GB RAM, 1 TB disk.** Enough to hold the full Europe OSM extract and build Valhalla tiles from whole-country extracts for every EV8 country. Corridor clipping stays, but only to keep audit data small, not because of hardware. |
+| D2 | 2026-10-14 | **Stack confirmed:** Python audit engine, TypeScript API and web app. |
+| D3 | 2026-10-14 | **First route: EuroVelo 8 (Mediterranean).** Use case: the owner riding it in autumn (Sep–Nov) 2027. Golden routes: EV8 (primary), plus the EV15 certified section for calibration against its 2025 ECS certification report. |
+| D4 | 2026-10-14 | **Routing stays in the batch path.** There is no always-on routing service in production. Detours, access distances and bridge suggestions are computed during audits and closure ingestion. See 10.1 for the cost reason. |
+| D5 | 2026-10-14 | **Approach ECF later,** once a credible EV8 prototype exists. Until then, use only public EuroVelo data under its ODbL licence and avoid any use of the EuroVelo® mark that implies endorsement. |
+| D6 | 2026-10-14 | **The owner already has an Apple Developer membership,** so WeatherKit (500k calls/month included) can be used as a forecast provider during the prototype, alongside Open-Meteo and MET Norway. |
+| D7 | 2026-10-14 | **The LLM is provider-neutral and the model is not chosen yet.** An open-source / open-weight model may be used. LLM features stay optional and sit behind a small interface, so the choice (local or hosted) can wait until a feature needs it. |
+| D8 | 2026-10-14 | **The early prototype runs locally on the laptop only.** The API binds to 127.0.0.1; Cloudflare comes later (section 10). |
+| D9 | 2026-10-14 | **M0 runs natively on Windows on ARM.** It uses uv + Python 3.14 and Node 24, because nothing in M0 needs GDAL or Docker. **WSL2 + Docker Desktop are required from M1** (Valhalla, osmium, GDAL). Root `package.json` scripts replace `just`, and npm workspaces replace pnpm, to avoid extra tools. |
+| D10 | 2026-10-14 | **Audit Bundle v0 (M0) is plain JSON/GeoJSON:** manifest, path, sections, findings, profile. `audit.sqlite` and PMTiles join the bundle in M1, when layers and places arrive. |
+
+---
+
+## 1. Guiding principles
+
+| # | Principle | What it means in practice |
+|---|---|---|
+| 1 | **Honest beats pretty** | Every value carries a source, an observed date and a confidence. "Unknown" is a valid value: a section where 23% of the surface tags are missing says so. The brand promise depends on this. |
+| 2 | **Everything is route-relative** | All data is projected onto route km. "What's ahead in the next 40 km" becomes a range query, not a GIS problem. |
+| 3 | **Network-agnostic core** | EuroVelo is one *network adapter*. USBRS, national networks such as France Vélo and the UK NCN, and user-uploaded GPX are other adapters. |
+| 4 | **Precompute what's slow, fetch live only what changes** | Infrastructure, services and climate are audited in batch. Forecasts, warnings, smoke and closures are fetched at request time and cached. |
+| 5 | **The server knows routes; the device knows the rider** | Personalisation (fitness, dates, stage plan, location) happens on the client. The server only holds non-personal route data. |
+| 6 | **Portable by construction** | Storage, cache, queue and scheduler sit behind small interfaces, with laptop implementations now and Cloudflare implementations later. |
+| 7 | **Reproducible audits** | Given the same source snapshots and pipeline version, an audit gives the same output. Diffs over time ("+38 km of new greenway since the last audit") are only meaningful under that condition, and they are a key B2B product. |
+
+---
+
+## 2. System overview
+
+```
+ ┌──────────────────────────── AUDIT ENGINE  (Python · batch · Docker) ─────────────────────────────┐
+ │                                                                                                 │
+ │  Source adapters ──► Normalise & ──► Corridor ──► Map-match ──► Decorators ──► Rules & ──► Bundle │
+ │  (fetch, snapshot,   measure (LRS)   extract     to OSM        (layers of     scores     writer  │
+ │   provenance,        sections        (OSM, DEM,  (Valhalla)    events)        (ECS-       (+diff) │
+ │   licence)                           places…)                                 aligned)            │
+ └───────────────────────────────────────────────────────────────────────────────────────┬─────────┘
+                                                                                         │
+                                                            Audit Bundles (versioned, immutable)
+                                                            local ./data/bundles  →  later R2
+                                                                                         │
+ ┌──────────────────────── API  (TypeScript · Hono · Node now → Workers later) ──────────▼─────────┐
+ │  Catalogue · audits · layers · findings · places · GPX export · bundle download                 │
+ │  Live providers: forecast · warnings · air quality/smoke · fire · closures   (cached by block)  │
+ └───────────────┬─────────────────────────────────────────────────────────────┬───────────────────┘
+                 │                                                             │
+     Prototype web app (V1)                                         iOS app (later phase)
+     React + MapLibre: review, tuning,                              offline bundle, on-device
+     planner and "Go" simulation                                    planner, StoreKit 2, no account
+```
+
+---
+
+## 3. Core domain model
+
+### 3.1 Entities
+
+| Entity | Purpose | Notes |
+|---|---|---|
+| **Network** | A family of routes with its own metadata and assessment profile | `eurovelo`, later `usbrs`, `fr-velo`, `uk-ncn`, `user` |
+| **Route** | A named route within a network | `eurovelo:ev6` (ref, name, official URL, countries) |
+| **RouteVersion** | An immutable geometry snapshot | Linked to a source snapshot, e.g. "EuroVelo GPX downloaded 2026-10-10". Has a geometry hash. Routes change over time, so every audit is tied to a version. |
+| **Component** | A continuous linear piece of a route version | `kind`: ride, ferry, public-transport link, gap. Carries variants and alternatives, e.g. EV15 left/right bank. |
+| **Path** | An ordered sequence of components with its own km measure | The "main line" plus each variant. Users plan along a path. |
+| **Section** | A km range on a path with attributes | Kinds: `minor` (1 km, ECS unit), `daily` (EuroVelo daily sections), `country`, `status` (EuroVelo development level), `block` (fixed 50 km tiles for live-data caching) |
+| **Layer** | A registered type of decoration | e.g. `surface`, `traffic_stress`, `gradient`, `signage`, `place.accommodation`, `climate.monthly`, `warning`. Has a JSON Schema for its value, a kind (linear / point / areal / temporal) and a version. |
+| **Event** | A single decoration on a path | `layer, path_id, from_m, to_m` (or `at_m`), `offset_m, side, access_m, value (typed JSON), source_id, observed_at, valid_from/to, confidence, licence_id` |
+| **Source** | A data source snapshot | id, snapshot date/version, licence, attribution string, retrieval method |
+| **AuditRun** | One run of a pipeline profile over a route version | Pipeline id and version, decorator versions, source snapshots, parameters, timings, status |
+| **Finding** | Something a rider or curator should know | `rule_id, severity (info / caution / warning / blocker), km range, title, detail, evidence (event ids), ecs_criterion, confidence` |
+| **Score** | A measured result for a section on one dimension | Pass / fail / unknown per criterion per 1 km minor section, aggregated to % of length (as ECS reports do), plus 0–100 indices for user-facing summaries |
+
+### 3.2 Linear referencing details
+
+- **Measure.** Geodesic metres along the resampled path geometry, in a canonical direction. The reverse direction is handled by transformation (`m' = L − m`, gradients flip, wind is re-evaluated against heading), not by storing the data twice.
+- **Point features** such as a campsite or station are projected onto the path with three values:
+  - `at_m`: the km position along the route.
+  - `offset_m`: straight-line distance off the route.
+  - `access_m`: *ridden* detour distance, computed with the routing engine for the nearest candidates.
+
+  The last one matters. "Campsite 400 m away" is useless if it's across the Danube and 12 km by bike.
+- **Areal data** (warning areas, protected areas, fire danger cells) is intersected with the path into linear events.
+- **Temporal data** (seasonal opening, ferry seasons, monthly climate) uses `valid_from/valid_to` or a month vector in the value.
+- **Stable keys.** Events reference `path_id` and the RouteVersion. When a route's geometry changes, the engine re-projects events onto the new version and records which km ranges changed.
+
+---
+
+## 4. The Route Audit pipeline
+
+### 4.1 Stages
+
+| Stage | What happens | Key tools |
+|---|---|---|
+| **1. Acquire & snapshot** | Source adapters download data and store it under `data/raw/<source>/<snapshot>/` with a manifest recording the licence and attribution. Downloads are idempotent and cached. | httpx, hishel (HTTP cache), tenacity |
+| **2. Normalise geometry** | Parse GPX (multiple tracks and segments). Remove duplicate points and GPS spikes. Detect discontinuities (jump > threshold → `gap` component). Detect ferry legs by matching to OSM `route=ferry`. Densify and resample to ~10–20 m. Compute cumulative geodesic measures. Build components and paths. | gpxpy, shapely 2, pyproj (Geod) |
+| **3. Sectioning** | Create 1 km minor sections, EuroVelo daily sections and development-status sections (from EuroVelo data), country sections and 50 km live-data blocks. | engine LRS module |
+| **4. Corridor extraction** | Buffer each path into a narrow corridor (~1 km) for infrastructure and a wide corridor (~10–25 km) for services, transport and detours. Clip OSM, places and DEM to the corridors. This keeps everything laptop-sized. | osmium-tool, QuackOSM (PBF → GeoParquet with geometry filter), DuckDB spatial, rasterio |
+| **5. Map-match** | Snap the route onto the OSM network with an HMM-based matcher (Valhalla `trace_attributes`, bicycle costing). Output: per-segment matched OSM `way_id`s with match confidence. Join the way IDs back to *raw* OSM tags (surface, smoothness, tracktype, maxspeed, lanes, cycleway:\*, lit, width, bridge, tunnel). Unmatched or low-confidence stretches become findings: off-network track, GPX error, or a path missing from OSM. | Valhalla (Docker); own fallback matcher in DuckDB/shapely |
+| **6. Decorate** | Decorators turn corridor data into layers of events (4.2). They run as a dependency graph, and each declares what it requires and provides. | engine pipeline runner |
+| **7. Assess** | A rules profile (YAML plus small Python rule functions) evaluates the layers into findings and scores. The EuroVelo profile follows ECS. Thresholds are parameters, so they can be tuned from the prototype UI and only this stage re-runs. | engine rules module |
+| **8. Package** | Write the Audit Bundle (section 7), render the report, build PMTiles and per-section GPX, and diff against the previous run of the same route. | sqlite3, tippecanoe/pmtiles, Jinja2 + WeasyPrint |
+
+**Incremental and cacheable.** Every decorator's output is keyed by a hash of its code version, parameters, input-layer hashes and source snapshot. Changing one rule threshold re-runs only stage 7, in seconds. A new OSM snapshot re-runs only the affected decorators.
+
+**Freshness.** Sources refresh on different cycles:
+
+| Source | Refresh |
+|---|---|
+| OSM | Monthly full refresh, plus a daily *change monitor* that reads OSM replication diffs, flags edits to ways inside route corridors (new `construction`, `access=no`, a bridge removed, a new cycleway) and marks sections for re-audit |
+| Overture places | Monthly (its release cycle) |
+| EuroVelo data | Yearly (ECF updates GPX and status annually) |
+| Climate normals | Once, then rarely |
+
+### 4.2 Audit dimensions (decorators and rules)
+
+| Dimension | What we compute | Main inputs | ECS link |
+|---|---|---|---|
+| **Continuity & gaps** | GPX discontinuities; off-network stretches; development-status gaps; official public-transport-link legs; ferries and their seasons | EuroVelo GPX and status, OSM, ferry data | Continuity |
+| **Infrastructure type** | Separated track, greenway, cycle lane, cycle street, quiet road, busy road, track or path | OSM highway, cycleway:\*, bicycle=\*, segregated; matched edge use | Infrastructure components |
+| **Traffic stress** | Level of Traffic Stress (LTS 1–4) per segment, with rural adaptations (speed, class, shoulders); measured AADT traffic counts where a country publishes them openly | OSM maxspeed/lanes/class; national traffic-count open data (e.g. FR, DE, NL, UK) | Safety (traffic volume and speed) |
+| **Surface & width** | Surface class, smoothness, tracktype, width; rolling-resistance estimate; *% unknown*; suitability per bike type (road, touring, gravel, cargo/trailer) | OSM tags (later: imagery classification) | Surface & width |
+| **Gradient & effort** | Smoothed elevation profile, gradient histogram, sustained climbs (with categorisation), max 500 m gradient, climbing per km; bridges and tunnels interpolated rather than taken from the DEM | Copernicus DEM GLO-30; national open LiDAR terrain models where available | Gradients |
+| **Signage / wayfinding** | EuroVelo "signed" status per daily section; OSM guideposts and route relations; Mapillary sign detections; a confidence level for each | EuroVelo status, OSM, Mapillary/Panoramax | Signposting |
+| **Attractiveness** | Landscape mix (land cover), water/coast proximity, protected areas, heritage and viewpoints, *theme density* (wineries, castles, beaches, villages) for the Dream matchmaker | Corine Land Cover, Natura 2000, OSM tourism/historic, Wikidata | Attractiveness |
+| **Services** | Accommodation by type (hotel, B&B, hostel, campsite, cyclist-friendly label); food and resupply; water; toilets; bike shops and repair stations; ATM; pharmacy and hospital. Longest gap per service type in each direction; seasonal opening; detour distance. | OSM, Overture, Foursquare OS Places, cyclist-friendly label schemes | Services (accommodation, food & drink, …) |
+| **Public transport** | Stations within X km and their access distance; bike-carriage policy; bail-out coverage (max km to a bike-friendly station) | OSM, GTFS/NeTEx feeds, curated operator bike policies | Public transport |
+| **Remoteness** | Population density, distance to the nearest town or services, estimated mobile coverage gaps | GHSL population grid, OSM places, open coverage data where available | — (rider value) |
+| **Climate & season** | Monthly normals per daily section (temperature max/min, rain days, heat days, wind rose relative to route heading); daylight hours; school-holiday crowding; ferry and campsite seasons | ERA5 / ERA5-Land, astronomical calculation, OSM opening_hours, OpenHolidays API | — |
+| **Data quality** | Divergence between the EuroVelo GPX and the OSM EuroVelo relation; tag completeness; stale or contradictory data | EuroVelo GPX, OSM | Feedback to ECF and the OSM community |
+
+### 4.3 Findings, scores and confidence
+
+- **Findings** are the "local buddy" content, e.g. "km 312–318: 6.2 km on a 80 km/h road without shoulder, LTS 4, no EuroVelo signs observed. Bridge option: riverside track on the south bank, +1.8 km, LTS 1, gravel."
+- **ECS-style scoring.** Each criterion is pass / fail / unknown per 1 km minor section, aggregated to the % of length meeting essential and important criteria. That mirrors how ECS certification reports summarise a route, so our output can be compared directly with published reports.
+- **User-facing indices** are 0–100 or 1–5 per daily section: Physical challenge (climbing, gradients, surface roughness, distance between services), Comfort and safety, Wayfinding, Services, Remoteness and Scenery. Each index shows its confidence.
+- **Confidence** comes from data completeness (% of km with the relevant tags), source agreement (EuroVelo status vs. OSM vs. imagery) and data age.
+
+### 4.4 "Gaps to bridge"
+
+The engine classifies each gap:
+
+- Undeveloped or unknown official section
+- Official public-transport link
+- Broken GPX
+- Off-network
+- Unsafe (LTS 4)
+- Unrideable for the chosen bike type
+- Seasonal: ferry not running, pass closed
+- Services desert
+
+For each gap it suggests bridging options:
+
+- An alternative routed line (Valhalla or BRouter with a low-stress cycling profile), audited with the same decorators.
+- A train or bus hop between two stations that accept bikes.
+- A ferry.
+
+Bridges are stored as optional *variant components*. The rider's starter GPX can include them as alternative tracks.
+
+---
+
+## 5. Data sources
+
+Licence notes reflect my current understanding. Anything marked **verify** needs a check of the provider's terms before commercial launch.
+
+### 5.1 Route geometry and route metadata
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **EuroVelo GPX tracks** (ECF) | Official geometry; development status per daily section (new 7-category legend in 2026; updated yearly) | Download from eurovelo.com / pro.eurovelo.com | **ODbL** since Oct 2024 (licence document updated Dec 2025). Attribution: credit EuroVelo.com, the download date and ODbL. Share-alike on derived databases. "EuroVelo®" is a registered ECF trademark, so don't imply endorsement. |
+| **ECS manuals and certification reports** | Rule design; calibration ground truth | PDFs on eurovelo.com | Reference only |
+| **EuroVelo Data Hub** (ECF) | Network stats, development-status reports, usage barometer | pro.eurovelo.com | Reports; potential data partnership |
+| **OSM route relations** (`route=bicycle`, `network=icn/ncn/rcn`, `ref=EV6`) | Second geometry source; national and regional networks; data-quality comparison | OSM extracts | ODbL |
+| **User GPX** (later) | Any route | Upload | User's own data (see privacy, section 9) |
+| **USBRS / other networks** (later) | Other networks via adapters | e.g. AASHTO / Adventure Cycling data, OSM `network=ncn` in the US | Varies, **verify** |
+
+### 5.2 Road and path network, base map, terrain
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **OpenStreetMap** | Network attributes, POIs, ferries, stations, guideposts | Geofabrik country/Europe extracts (PBF); replication diffs | ODbL, free |
+| **Valhalla** (self-hosted) | Map matching, detour/bridge routing, access distances | Docker, tiles built from corridor-clipped OSM | MIT, free |
+| **BRouter** (optional) | Cycling-specialist alternative routing for bridges | Self-host (Java) | MIT, free |
+| **OpenFreeMap** or **Protomaps** | Basemap vector tiles for the prototype | OpenFreeMap: hosted, no key. Protomaps: PMTiles file self-hosted (later on R2) | OSM-derived (ODbL attribution), free |
+| **Copernicus DEM GLO-30** | Elevation everywhere in Europe | Cloud-optimised GeoTIFFs (AWS Open Data) | Free incl. commercial, attribution. Note: it is a *surface* model (includes trees and buildings), so it needs smoothing plus bridge/tunnel handling. |
+| **National LiDAR terrain models** | Better gradients where available | e.g. NL AHN, FR IGN RGE ALTI / LiDAR HD, ES CNIG, DE state DGM1, AT, DK | Mostly open licences, **verify** per country |
+| **Mapillary** / **Panoramax** | Signage evidence; surface spot-checks | Mapillary API (token); Panoramax API | Mapillary: free API, imagery CC BY-SA, **verify** ToS for derived commercial data. Panoramax: open. |
+
+### 5.3 Services: accommodation, food, water, repair
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **OSM POIs** | Hotels, guest houses, hostels, campsites, shelters, water, toilets, shops, cafés, `shop=bicycle`, `amenity=bicycle_repair_station`, pharmacies, ATMs, e-bike charging | Corridor extracts | ODbL |
+| **Overture Maps Places** | Extra POI coverage and confidence | Monthly GeoParquet releases, queried with DuckDB | CDLA-Permissive-2.0 (places theme) |
+| **Foursquare OS Places** | Extra POI coverage | GeoParquet | Apache 2.0 |
+| **Cyclist-friendly labels**: Bett+Bike (DE), Accueil Vélo (FR), Fietsers Welkom! (NL), others | "Cyclist-friendly" flag on accommodation and cafés | France: some via **DATAtourisme** (open). Others by partnership. | Varies. ECF reports 26,000+ labelled businesses network-wide, a partnership opportunity. |
+| **Booking.com / Expedia affiliate** (later) | "Book" deep links and revenue | Affiliate programmes (deep links need no data sharing) | Commercial; earns commission |
+| **Warmshowers, ACSI campsites** | Link-out only (no open API) | — | — |
+| **Google Places** | *Avoid for core data*. Its terms forbid storing anything but place IDs and require display on Google maps, which is incompatible with offline packs. Deep links ("open in Google Maps") are fine. | — | — |
+
+Multiple POI sources are **conflated** into one Place, matched by distance plus name similarity, keeping links to each source.
+
+### 5.4 Public transport
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **OSM** stations and stops | Station locations along the corridor | Extracts | ODbL |
+| **Mobility Database** catalogue + **national access points** (EU rules require member states to publish transit data) | GTFS/NeTEx timetables, `bikes_allowed` where populated | Feed downloads | Mostly open, varies per feed |
+| **Transitous** (community MOTIS-based European journey planner) | "Train from A to B" in the prototype | Public API (fair use) | Free; self-host **MOTIS** (MIT) for production |
+| **Curated bike-carriage policy** | Per operator / train type: bikes allowed? reservation? seasonal rules? | Our own dataset, a few hundred rows, maintained in-repo | Ours |
+
+### 5.5 Climate (Dream phase)
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **ERA5 / ERA5-Land** (Copernicus Climate Data Store) | 30-year monthly normals per daily section: temperatures, rain days, heat days, wind roses | CDS API, one-off batch per corridor bbox | Free incl. commercial, attribution |
+| **Open-Meteo Historical API** | Fast path while prototyping | Simple REST | Free for non-commercial use only; paid plan for commercial use |
+| **Astronomical calculation** | Daylight hours, sunrise and sunset | Library (suncalc) | — |
+| **OpenHolidays API** | School and public holidays by country and region (crowding, accommodation pressure) | REST | Open data |
+| **Eurostat tourism statistics** | Seasonal tourism intensity by region | Eurostat API | Free (Eurostat reuse policy) |
+
+### 5.6 Live: forecasts, warnings, fire, smoke, water levels, closures (Go phase)
+
+| Source | Use | Access | Licence / cost |
+|---|---|---|---|
+| **Open-Meteo Forecast** | Prototype forecasts (ECMWF, ICON, Météo-France, … blended) | REST | Free non-commercial; commercial plan or self-host (open source) for production |
+| **MET Norway Locationforecast** | Production-grade free forecast | REST, identifying User-Agent, must cache | Free incl. commercial, CC BY 4.0 |
+| **Apple WeatherKit** | Forecasts from the backend now (D6) and on iOS later | REST/Swift | 500k calls/month included with the Apple Developer Program (already held); attribution required |
+| **MeteoAlarm** (EUMETNET) | Official warnings, ~38 European countries, CAP format | Atom/CAP feeds | Free. **Verify** redistribution terms and national members' terms. Germany's feed differs. Since 2024 the EU high-value-datasets rules also require national met services to publish warnings openly (fallback per country). |
+| **CAMS** European air-quality forecast | PM2.5/PM10 forecasts, i.e. wildfire smoke and Saharan dust | Copernicus ADS API, or Open-Meteo Air Quality API | Free, attribution (Open-Meteo same caveat) |
+| **EFFIS** (Copernicus fire service) | Fire danger forecast, active fires, burnt areas | WMS/WFS/downloads | Free, attribution |
+| **NASA FIRMS** | Near-real-time fire hotspots (VIIRS/MODIS) | REST with free MAP_KEY | Free |
+| **National river gauges**: PEGELONLINE (DE), Hub'Eau/Vigicrues (FR), others | Riverside path flooding (Danube, Rhine, Elbe, Loire) using curated per-section flood thresholds | REST | Open |
+| **Closures and diversions** | No single source exists, so we build one by layering: (1) curated entries from NECC and EuroVelo news and national route sites, with LLM-assisted extraction from multilingual pages and human approval; (2) DATEX II roadworks from national access points (motor-road heavy); (3) the OSM corridor change monitor; (4) seasonal closures (ferries, alpine passes); (5) later, anonymous rider reports | Mixed | Mixed; curated layer is ours |
+
+### 5.7 Attractiveness and remoteness
+
+| Source | Use | Licence |
+|---|---|---|
+| **Corine Land Cover** (Copernicus) | Landscape character | Free, attribution |
+| **Natura 2000** (EEA) | Protected areas | CC BY 4.0 |
+| **Wikidata** | Geotagged heritage, notable places | CC0 |
+| **GHSL population grid** (JRC) | Remoteness | CC BY 4.0 |
+| **OSM** viewpoints, historic, wineries, beaches | Theme density | ODbL |
+| Avoid **WDPA / Protected Planet** | Non-commercial terms | — |
+
+### 5.8 Commercial options worth knowing (not needed for V1)
+
+| Service | When it's worth it |
+|---|---|
+| TomTom / HERE traffic statistics | Real traffic volumes for B2B reports |
+| Open-Meteo commercial plan | Simplest production weather |
+| MapTiler (Swiss, EU-friendly) | Hosted basemaps, if self-hosting tiles becomes a chore |
+| Affiliate accommodation APIs | Revenue |
+
+Strava Metro is only available to planning organisations. It can't be used by us, but our B2B customers often have it, so the design allows them to bring their own layers (section 8).
+
+### 5.9 Paid services during prototyping
+
+Only one item costs money, and it is optional. Everything else is free or free with registration.
+
+| Item | Needed? | Cost |
+|---|---|---|
+| **LLM** (closure extraction, narrative summaries) | Optional; the audit works without it. Model not chosen yet (D7). | An open-weight model run locally costs nothing but laptop time; hosted APIs are pay-per-use |
+| **Open-Meteo** forecasts and air quality | Free tier. Their pricing page says to use it for evaluation and prototyping. Limit: 10,000 calls a day. | $0 now. A paid plan is needed before launch, because an app with paid passes counts as commercial. |
+| **Climate history** | Use ERA5 from Copernicus CDS, not Open-Meteo's historical API, which needs its Professional tier for commercial use | $0 (free account) |
+| **Free accounts or keys to register** | Copernicus CDS and ADS, NASA FIRMS, Mapillary | $0 |
+| **Cloudflare Workers Paid** | Only if deploying during the prototype. Tunnel + Access are free for sharing from the laptop. | $5/month |
+| **Apple Developer Program** | Already held (D6); unlocks WeatherKit now | $0 extra |
+| **Commercial traffic volumes** (TomTom/HERE) | Deferred to B2B; first test whether the traffic-stress estimate from OSM tags holds up on EV8's on-road stretches | Sales-led pricing |
+
+### 5.10 Licensing implications (important for monetisation)
+
+- **EuroVelo GPX and OSM are both ODbL, so they combine cleanly.** Our derived audit database, built from them, is an ODbL *derivative database*. If we use it publicly (app users, B2B), we must offer that derived database under ODbL. Maps, screens and PDF reports are *produced works* and only need attribution.
+- **Recommended strategy:**
+  - Publish the OSM/EuroVelo-derived layers openly. It costs little and builds goodwill with ECF and the OSM community.
+  - Keep curated and proprietary layers (closures registry, bike-policy dataset, field validations, customer data) as *separate* layers. Under OSMF guidance this forms a "collective database", where the separate layers aren't pulled into share-alike.
+  - Sell the analysis, freshness, change tracking, prioritisation, reports and app experience, not the raw data.
+- **This is one reason per-layer provenance is in the core model:** licence compliance becomes a query.
+- Get a short legal review before B2B sales.
+
+---
+
+## 6. Technology stack
+
+### 6.1 Why Python and TypeScript
+
+- **Python for the engine.** It has the strongest geospatial ecosystem (shapely, pyproj, rasterio, DuckDB spatial, pyosmium, xarray), which is what heavy audit work needs. None of it runs inside a Worker, since Workers allow 128 MB of memory, have no GDAL and a limited CPU budget. As a Docker image it runs unchanged on the laptop, in Cloudflare Containers, or on any VM.
+- **TypeScript for the API and web app.** It is first-class on Cloudflare Workers, and Hono runs identically on Node (laptop) and Workers. The planner logic, written once in TS, runs in the browser now and is small enough to port to Swift later.
+- **The contract** between them is JSON Schema, generated from the engine's Pydantic models into TypeScript types. One source of truth.
+
+Alternative considered: all Python (FastAPI) for V1, then rewrite the API for Workers later. It's simpler on day one, but you'd pay for it with a rewrite at migration. Not recommended.
+
+### 6.2 Engine (Python 3.13+)
+
+| Purpose | Library / tool |
+|---|---|
+| Env and packaging | **uv** |
+| Models, validation, JSON Schema export | **Pydantic v2** |
+| CLI | **Typer** |
+| Local job API for re-runs triggered from the prototype | **FastAPI** + uvicorn (a small admin surface only) |
+| GPX | **gpxpy** |
+| Geometry and projections | **shapely 2**, **pyproj** |
+| Columnar and spatial queries | **DuckDB** (+ spatial extension), **pyarrow**, GeoParquet |
+| OSM extraction | **osmium-tool** (CLI), **pyosmium** (replication diffs), **QuackOSM** (PBF → GeoParquet with geometry and tag filters) |
+| Overture | DuckDB direct queries on the release GeoParquet |
+| DEM sampling | **rasterio** (windowed reads of COGs), **numpy**, **scipy** (Savitzky–Golay smoothing) |
+| Climate | **xarray**, **netCDF4**/**cfgrib**, **cdsapi** |
+| Spatial index | **h3** (H3 hex cells, for "near" lookups that work in SQLite, D1 and on device) |
+| POI conflation | **rapidfuzz** |
+| Opening hours | OSM `opening_hours` parser (Python binding; JS `opening_hours` on the API side) |
+| HTTP | **httpx**, **hishel** (caching), **tenacity** (retries) |
+| Reports | **Jinja2** + **WeasyPrint** (HTML → PDF) |
+| Vector tiles | **tippecanoe** (CLI) → PMTiles |
+| Logging | **structlog** |
+| Quality | **pytest**, **hypothesis** (property tests for the measuring maths), **syrupy** (snapshot tests on golden routes), **ruff**, **pyright** |
+
+Docker services:
+
+- **Valhalla** for map matching and routing. No official arm64 image is confirmed, so the first milestone verifies one or builds from source in WSL.
+- **BRouter**, optional.
+
+### 6.3 API (TypeScript, Node 24 LTS now, Workers later)
+
+| Purpose | Library |
+|---|---|
+| HTTP framework (Node + Workers) | **Hono** |
+| Validation and OpenAPI | **Zod** + **@hono/zod-openapi** |
+| SQL over SQLite now, D1 later | **Drizzle ORM** (better-sqlite3 driver locally, D1 driver on Workers) |
+| Blob storage abstraction | Own tiny interface: local filesystem ↔ R2 |
+| Cache abstraction | In-memory/disk LRU locally ↔ Workers Cache API / KV |
+| Geo helpers | **h3-js**, **@turf/** (selected modules), **suncalc**, **opening_hours** |
+| Tests | **vitest** |
+| Workers tooling (later) | **wrangler** |
+
+### 6.4 Prototype web app
+
+| Purpose | Library |
+|---|---|
+| Build | **Vite**, **React 19**, TypeScript |
+| Map | **MapLibre GL JS**, **pmtiles** protocol, OpenFreeMap basemap; terrain hillshade optional |
+| Data fetching | **TanStack Query** |
+| Charts (elevation profile, "strip diagram", climate heatmaps) | **uPlot** (fast, small) and/or **Observable Plot** |
+| Styling | Plain CSS modules (no UI framework needed for a review tool) |
+
+### 6.5 Monorepo layout
+
+```
+dreamplango/
+  docs/                    design, ADRs (architecture decision records), data-licence register
+  schemas/                 JSON Schemas (generated from engine models): the shared contract
+  engine/                  Python package `dpg_audit`
+    src/dpg_audit/
+      sources/             adapters: eurovelo, osm, overture, fsq, dem, era5, gtfs, …
+      lrs/                 measuring, projection, sectioning, path graph
+      match/               Valhalla client + fallback matcher
+      decorators/          one module per layer family
+      rules/               rule functions; profiles/ holds YAML (eurovelo-ecs.yaml, user-gpx.yaml, …)
+      pipeline/            dependency-graph runner, content-hash cache, provenance
+      outputs/             bundle writer, GPX writer, report renderer, tiles
+      jobs/                FastAPI admin/job server (local)
+    tests/  golden/        golden routes + expected snapshots
+  packages/
+    planner/               TS: stage planner + riding-time model (pure, portable)
+    contracts/             TS types generated from /schemas
+  api/                     Hono app (Node entry + Workers entry)
+  web/                     Vite/React prototype
+  infra/                   docker-compose (valhalla, engine), Dockerfiles, later wrangler config
+  data/                    (git-ignored) raw/ cache/ work/ bundles/
+  package.json             npm workspaces + task scripts (`npm run ingest:ev8`, `npm run dev`, …) (D9)
+  .claude/launch.json      dev-server definitions (api, web, web-preview)
+```
+
+As built in M0, the engine has `config`, `models`, `contracts`, `lrs/`, `ingest/gpx`, `networks/eurovelo`, `build` (path assembly + data-quality findings), `bundle` and `cli`. The `sources/`, `match/`, `decorators/`, `rules/` and `pipeline/` packages arrive with M1.
+
+### 6.6 Running it on the Windows on ARM laptop
+
+- **M0 ran natively on Windows (D9).** From M1 onwards, use WSL2.
+- **WSL2 + Ubuntu 24.04 (arm64)** is the development environment from M1. Python geospatial wheels (shapely, pyproj, rasterio, DuckDB, pyarrow, h3, pyosmium) all ship Linux aarch64 builds. VS Code connects with Remote-WSL.
+- **Docker Desktop for Windows on Arm** runs the linux/arm64 containers (Valhalla, engine).
+- **Keep `data/` on the WSL ext4 filesystem**, not under `/mnt/c`. Cross-filesystem I/O is many times slower.
+- **Disk budget:** roughly 100–150 GB for all routes (OSM extracts, corridor GeoParquet, Valhalla tiles, DEM tiles, climate cache). Starting with 2–3 routes needs far less.
+- **Sharing the prototype:** a **Cloudflare Tunnel** plus **Cloudflare Access** lets you show it to someone without opening ports, and you already use Cloudflare.
+
+---
+
+## 7. Audit Bundle and API
+
+### 7.1 Audit Bundle (the central artifact)
+
+`bundles/<network>/<route>/<run-id>/`, where `run-id = <timestamp>_<content-hash>`:
+
+| File | Content |
+|---|---|
+| `manifest.json` | Route version, pipeline profile + versions, source snapshots, **licences and attribution strings**, stats |
+| `audit.sqlite` | Paths, components, sections, events (typed columns + JSON value), places, findings, scores, climate. Indexed by `(path_id, from_m)` and by H3 cell, with no spatial extension needed, so the same file works in Node, D1 and on iOS. |
+| `tiles.pmtiles` | Route lines styled by layer, findings and places, for fast map rendering |
+| `gpx/` | Starter GPX per daily section, annotated with waypoints for findings (shows up on Garmin and in RWGPS/Strava imports) |
+| `report.html` / `report.pdf` | Human-readable audit report |
+| `diff.json` | Changes vs. the previous run (km improved or degraded, new or resolved findings) |
+
+A pointer file per route marks the "current" bundle. Publishing is an atomic pointer swap, and rollback is trivial.
+
+**Bundle v0 (M0, D10):** `manifest.json`, `path.geojson` (ride components, plus gap connectors between them), `sections.json` (daily, status, components, 50 km blocks, 1 km minor sections), `findings.json` and `profile.json` (elevation every 200 m). The schema is in `schemas/bundle-v0.schema.json`, and the TS types are generated into `packages/contracts`.
+
+### 7.2 API sketch (v1)
+
+```
+GET  /v1/networks                                    list networks
+GET  /v1/networks/{net}/routes                       routes with headline indices
+GET  /v1/catalogue                                   compact Dream catalogue (all daily sections × month), cacheable
+GET  /v1/routes/{route}                              route summary, current audit id, paths/variants
+GET  /v1/audits/{audit}/sections?kind=daily
+GET  /v1/audits/{audit}/layers/{layer}?path=&from_km=&to_km=
+GET  /v1/audits/{audit}/findings?severity=&from_km=&to_km=
+GET  /v1/audits/{audit}/places?cat=&from_km=&to_km=&max_detour_m=
+GET  /v1/audits/{audit}/climate?month=
+GET  /v1/audits/{audit}/gpx?from_km=&to_km=&annotate=true&bridges=true
+GET  /v1/audits/{audit}/bundle                       offline pack (sqlite + pmtiles)
+GET  /v1/audits/{audit}/report                       HTML/PDF
+
+GET  /v1/live/forecast?route=&block=                 hourly grid at points every ~10 km in a 50 km block, next 72 h
+GET  /v1/live/alerts?route=&block=                   warnings, fire, smoke, flood, closures intersected with the block
+
+# prototype-only admin (local)
+POST /admin/audits {route, profile, params}          trigger a run via the engine job server
+GET  /admin/runs, /admin/runs/{id}/log, /admin/diff?a=&b=
+```
+
+Live data is requested by *route block* (a fixed 50 km tile of a route), never by GPS coordinate. The client turns the block's grid into "your weather at your expected position and time". The server learns only that someone looked at a 50 km stretch. Every user asking about the same block shares one cached response, which keeps things private and cheap.
+
+---
+
+## 8. How the flexibility is achieved
+
+1. **Network-agnostic core model.** Network → Route → RouteVersion → Component/Path. EuroVelo-specific knowledge (status legend, daily sections, ECS rules) lives in a *network adapter* and a *rules profile*. Adding USBRS means writing an adapter and a profile, not changing the core.
+2. **Linear-referenced event layers** are the universal "decoration" mechanism. Any dataset that can be located (points, lines, areas, time windows) becomes events on route km.
+3. **Plug-in registries** for five extension types:
+
+   | Plug-in | What it does |
+   |---|---|
+   | Source adapters | Fetch and snapshot data, with provenance and licence |
+   | Decorators | `requires` → `provides` layers, declared versions and parameters, `applies_to` predicate (region/network) |
+   | Rules | Turn layers into findings and scores, grouped into YAML profiles |
+   | Live providers | Request-time data |
+   | Renderers | Report and GPX formats |
+
+   Python plug-ins register through package entry points, so a new data source is a new module plus one line of config.
+4. **Region capability registry.** Each provider declares the area it covers, e.g. warnings: Europe → MeteoAlarm, US → NWS; air quality: Europe → CAMS, US → AirNow; traffic counts: FR → national open data. The pipeline picks providers per section, so mixed or new regions work automatically.
+5. **Profiles, not code, define audit types.** `eurovelo-ecs.yaml` (ECS-aligned), `user-gpx.yaml` (lighter, faster), `b2b-tourism.yaml` (services and business-opportunity focus), `usbrs.yaml` later.
+6. **Bring-your-own-data layers.** B2B customers can upload private layers (counter data, Strava Metro exports, their own signage surveys). These are stored as separate, access-controlled layers and appear in their reports.
+7. **Provenance and licence on every datum.** You can add commercial or restricted sources without contaminating open layers, and attribution is generated automatically.
+8. **Versioned, immutable bundles** consumed by every client (API, web, iOS offline, report renderer), so new consumers don't need new pipelines.
+9. **Ports and adapters for infrastructure** (blob store, SQL, cache, queue, scheduler), so laptop → Cloudflare is configuration plus thin adapters.
+10. **Contract-first API** (OpenAPI generated from Zod, types generated from JSON Schema), versioned under `/v1`.
+
+---
+
+## 9. Privacy, and the "no account" question
+
+### 9.1 Verdict
+
+The no-account path is feasible for the consumer app. Nothing in the Dream–Plan–Go flow needs us to know who the user is. Apple already holds the purchaser's identity, and the user's own iCloud can hold their plans. What remains is a small, well-understood amount of transient processing (IP addresses, signed purchase receipts) that GDPR still covers, but which needs no accounts, consent banners or trackers.
+
+### 9.2 How each need is met
+
+| Need | Mechanism | Personal data we hold |
+|---|---|---|
+| Buy a Trip Pass | **StoreKit 2** in-app purchase; Apple handles payment and identity | None (Apple is controller for payment data) |
+| Restore on a new phone or family devices | StoreKit `currentEntitlements` / restore, Family Sharing | None |
+| Server checks the user owns a route (bundle download, live features) | App sends Apple's signed transaction (JWS); server verifies the signature with Apple's public certificates; stateless | None stored. Refund revocations via App Store Server Notifications, keyed by a *hashed* transaction id. |
+| Sync plans across devices | **CloudKit private database** / iCloud, which lives in the user's iCloud and that we cannot read | None |
+| "What's near me", "what's ahead" | **Offline bundle on device**: all near-me queries run locally (also essential where coverage is patchy) | None. Location never leaves the device. |
+| Live weather, warnings, smoke, closures | Requests **by route block**, CDN-cached and shared; the server proxies third-party APIs so the user's IP never reaches them | IP transiently (request processing only; app-level logs exclude IPs) |
+| Rider profile, fitness, dates, stage plan | Stored and computed **on device** (planner runs locally) | None |
+| Background alerts ("storm warning on tomorrow's stage") | Option A: background refresh + **local notifications** (no server state). Option B: **Live Activity broadcast channels** (iOS 18+), one channel per route block; the server never sees device tokens. Option C (opt-in): APNs token + subscribed blocks + automatic expiry at trip end. | A/B: none. C: pseudonymous token, short-lived. |
+| Upload own GPX for audit (later) | Device trims a privacy zone at start and end (home address); processed in an ephemeral container; result returned; nothing retained (or cached only by content hash for a few hours) | Transient |
+| Anonymous issue reports ("path flooded at km 412") | Report carries the issue's location, not the rider's track; abuse control via **App Attest / DeviceCheck** (no identity) | Issue location + coarse time |
+| Crash diagnostics | Apple's built-in reports / MetricKit (user opts in at OS level); no third-party SDKs | None from us |
+
+On the App Store, Apple's definition of "collected" excludes data processed only to serve a request in real time and not retained. With the design above, the App Privacy label can plausibly be **"Data Not Collected"**, which is a strong market differentiator.
+
+### 9.3 Obligations that remain
+
+| Area | What remains |
+|---|---|
+| **GDPR** | IP addresses are personal data, so we still need a privacy notice, a record of processing, and Cloudflare's data processing agreement (available on self-serve plans). A lightweight DPIA is wise because the product involves location, even though location stays on the device. Data-subject requests are trivial when nothing is stored. |
+| **ePrivacy (cookies/storage)** | Storing the user's own trips and offline packs on their device is "strictly necessary" for the service they asked for, so no consent prompt is needed, *provided* there are no analytics or ad SDKs. |
+| **App Store / EU DSA** | Apple requires EU *trader status*. If you are a trader (you will be, once selling), your address, phone and email are shown on the EU App Store page. Plan for a business address. |
+| **Affiliate booking links** | Once a user taps through, Booking.com and others are controllers of their own processing. Disclose this in the privacy notice. |
+
+### 9.4 Where accounts (or something like them) would become necessary
+
+| Situation | No-account alternative |
+|---|---|
+| **B2B portal** (route curators, tourism boards) | None needed: accounts here are fine, since this is business contact data under contract. Use Cloudflare Access or simple organisation logins. |
+| **Selling outside the App Store** (web, Android, gift passes) | Redeemable **Trip Pass codes** (bearer tokens), plus Google Play Billing on Android. Still no account. |
+| **Sharing a trip with riding partners** | **End-to-end encrypted share links**: plan encrypted on device, key in the URL fragment (never sent to the server), blob stored with expiry. |
+| **Paid passes for arbitrary user GPX routes** | A consumable purchase can't be restored by Apple. Store an anonymous entitlement token in iCloud Keychain, with a server-side record keyed by hashed transaction id. Still pseudonymous, still no account. |
+
+---
+
+## 10. Migration path: laptop → Cloudflare
+
+| Concern | V1 (laptop) | Cloudflare |
+|---|---|---|
+| Audit engine | `npm run ingest:…` (native in M0; Docker in WSL2 from M1) | **Cloudflare Containers** (GA Apr 2026), triggered by **Workflows** / **Queues** / **Cron Triggers** |
+| Bundles and raw data | `./data` | **R2** (no egress fees, good for offline-pack downloads) |
+| Query store | `audit.sqlite` per bundle | **D1** (import per route; 10 GB per database is plenty) |
+| API | Hono on Node | Hono on **Workers** (same code, different entry file) |
+| Live-data cache | In-memory/disk LRU | **Cache API** + **KV** |
+| Scheduled refresh (warnings polling, OSM change monitor) | cron in WSL | **Cron Triggers** → Workers / Containers |
+| Prototype web app | Vite dev server | Workers static assets |
+| Valhalla (routing/matching) | Docker | A Container may struggle with large tile sets on ephemeral disk. A small always-on VM is a pragmatic alternative. **Evaluate in V1.** |
+| Secrets | `.env` | Workers secrets |
+
+### 10.1 Estimated Cloudflare cost
+
+Rates are Cloudflare's published Containers and R2 pricing, checked 2026-10-14, in USD. Containers require the **Workers Paid plan ($5/month)**.
+
+**Container usage included in the plan each month:**
+- 25 GiB-hours of memory
+- 375 vCPU-minutes of CPU
+- 200 GB-hours of disk
+
+**Rates beyond the included usage:**
+
+| Resource | Rate | Equivalent |
+|---|---|---|
+| Memory | $0.0000025 per GiB-second | $0.009 per GiB-hour |
+| CPU (billed on active use only) | $0.000020 per vCPU-second | $0.072 per vCPU-hour |
+| Disk | $0.00000007 per GB-second | ~$0.00025 per GB-hour |
+
+Billing is in 10 ms increments while an instance runs, and stops when it sleeps. The largest instance is `standard-4`: 4 vCPU, 12 GiB memory, 20 GB disk.
+
+**R2 storage:** $0.015 per GB-month after 10 GB free. No egress fees, which matters for offline-pack downloads.
+
+The audit durations below are estimates, to be replaced with measured numbers from the laptop in M1.
+
+| Scenario | Assumption | Containers | Total incl. plan |
+|---|---|---|---|
+| **EV8 only (V1 / your 2027 trip)** | Full EV8 re-audit monthly on `standard-4`, ~2 h at ~75% CPU (24 GiB-h, ~6 vCPU-h, 40 GB-h) | **$0**, fits inside the included usage | **≈ $5–6/month**, including ~20–40 GB of R2 |
+| **All 17 EuroVelo routes** | ~25 h/month of audit runs on `standard-4` | ≈ $7.50 (memory $2.48, CPU $4.95, disk $0.08) | **≈ $15/month**, including 100–200 GB of R2 |
+| *Always-on routing (avoided, D4)* | Valhalla on `standard-3` (8 GiB) 24×7, ~5% CPU | ≈ $60/month | — |
+| *Same, on `standard-4` (12 GiB)* | 24×7 | ≈ $92/month | — |
+
+**Takeaways**
+
+- **The always-on case is the cost trap.** Memory and disk are billed for the whole time an instance is awake, even when idle. A permanently running routing server costs 10–20× more than all batch audits combined, which is why D4 keeps routing in the batch path.
+- **If request-time routing is needed later** (e.g. on-demand audits of user GPX files), there are two options:
+  - Wake a container on demand, with routing tiles baked into the image.
+  - Run routing on a small ARM VM at an EU host.
+- **Request-path costs stay small at app scale.** Workers requests, D1 and R2 reads have large included allowances, and live data is cached per 50 km route block.
+- **The bigger future costs aren't Cloudflare's:** a commercial weather plan once you charge money, and the Apple Developer Program ($99/year).
+
+### 10.2 Container constraints that shape the engine
+
+- **Instances are capped at 12 GiB memory and 20 GB disk, and disk is ephemeral.** All persistent state lives in R2. The engine processes one country at a time, streaming the inputs from R2. Whole-Europe OSM work (a ~30 GB extract) is not possible in a single container.
+- **Valhalla tiles must fit within instance disk.** For EV8, corridor-clipped tiles for all its countries should fit well under 20 GB. For the whole network, shard by region: one container instance per region, each addressed through its own Durable Object.
+
+---
+
+## 11. What V1 will build
+
+Milestones are ordered so you can see something in the browser early and tune as you go.
+
+| # | Milestone | Deliverables |
+|---|---|---|
+| **M0** ✅ 2026-10-14 | Foundations | Repo, task scripts, schemas, data-licence register. EuroVelo GPX inspected and ingested (see `docs/notes/eurovelo-gpx.md`). LRS core (measure, locate, project, slice, resample, sections) with property tests. Bundle v0 for EV8, a Hono API, and a React/MapLibre viewer with section list, findings and elevation profile. Natively on Windows; WSL2/Docker moved to M1 (D9). |
+| **M1** | Infrastructure audit | Corridor extraction; Valhalla matching (or fallback matcher); layers: infrastructure type, surface, traffic stress (LTS), elevation and gradient, EuroVelo status, signage (status + OSM), continuity/gaps. ECS-aligned rules v0. Bundle writer. Prototype: map coloured by layer, **strip diagram** (stacked km-based bands for surface, LTS, gradient, signage, status under the elevation profile), findings list linked to the map. |
+| **M2** | Services & access | Places conflation (OSM + Overture + Foursquare), seasonal opening, detour distances, stations + curated bike policy, services-gap and bail-out rules. Prototype: "what's ahead from km X" panel and services filters. |
+| **M3** | Dream data | Climate normals per daily section × month, daylight, wind relative to heading, direction advice, school holidays, ferry/campsite seasons, attractiveness and remoteness layers. Prototype: **best-time heatmap** (sections × months) and a section **matchmaker** query. |
+| **M4** | Plan | `packages/planner` with stage planner and riding-time model; annotated per-day GPX export; bridge suggestions for gaps. Prototype: plan a trip, compare plans. |
+| **M5** | Go simulation | Live providers (forecast grid by block, MeteoAlarm, CAMS, FIRMS/EFFIS, river gauges, closures registry, OSM change monitor). Prototype: **"simulate being at km X on date/time Y"**, showing the briefing a rider would see. |
+| **M6** | Reports & calibration | HTML/PDF audit report, run-to-run diff viewer, calibration against a published ECS certification report (e.g. EV15) and against your own field rides. |
+
+### 11.1 EV8 first: what it stresses
+
+EuroVelo lists EV8 at about 7,350 km from Cádiz to Athens, continuing to Cyprus. It is one of the least complete EuroVelo routes:
+- France is developed and signed.
+- Spain and the western Balkans have long on-road and in-development stretches.
+
+Riding it in autumn exercises exactly the parts of the audit that other apps ignore, so milestone priorities shift slightly.
+
+- **Seasonality moves forward from M3 into M2.** In autumn the season is winding down, so seasonal closures become a core finding rather than a nice-to-have:
+  - Coastal campsites and resort accommodation closing from late September or October.
+  - Reduced ferry timetables.
+  - Shortening daylight.
+- **Gaps and public-transport links are a core case, not an edge case.** Example: EuroVelo advises the suburban railway instead of the Athens–Corinth National Road, which has been closed to cyclists since June 2024. M1 must model official public-transport links and closures properly.
+- **Autumn weather hazards** for the Dream climate layer and the Go alerts:
+  - Late wildfire season (September).
+  - Autumn flash floods (Spain's "DANA" storms, Mediterranean cyclones).
+  - River and torrent crossings.
+- **Data coverage varies by country.**
+  - Check which countries MeteoAlarm covers. National fallbacks may be needed in the Balkans.
+  - OSM tagging completeness (surface, maxspeed) is thinner in some sections. The audit must report its confidence honestly.
+  - Some EV8 countries are outside the Schengen area (Bosnia-Herzegovina, Montenegro, Albania). The border-crossing and Schengen-days features apply.
+- **Calibration** uses EV15 (ECS report) for "known good" sections. EV8 France is a second check, since it is developed and signed.
+
+**Prototype extras for review and tuning:**
+
+- **Provenance inspector:** click any km to see every event, its source, date and confidence.
+- **Rules tuning panel:** edit thresholds, re-run stage 7 and compare.
+- **Run history** and source-health page (which feeds failed, how stale each snapshot is).
+- **Golden routes:** 3 calibration routes with snapshot tests, so tuning one route doesn't silently break another. Suggested: EV15 certified section, a rough EV1 Iberian section, and a route you have ridden yourself.
+
+---
+
+## 12. Additional features worth considering
+
+### Dream
+
+- **Section matchmaker.** "7 days in late May, mostly paved, low traffic, warm but not hot, wine and villages, train access at both ends." The app scans every contiguous run of daily sections across all routes, cheaply using precomputed per-section summaries. The catalogue is small enough (~1,500 daily sections × 12 months) to download and search **on device**, so Dream queries never reach the server.
+- **Best-time calendar.** A heatmap of route sections against months, built from a comfort index (temperature, rain, heat, daylight), crowding (holidays, tourism intensity) and service availability (seasonal closures).
+- **Direction advisor.** Which way to ride a route in a given month, based on prevailing winds relative to heading and net climbing.
+- **Reality-check card.** % certified/developed, longest unsigned stretch, km on busy roads, km unpaved, longest services gap and data confidence, on one screen. This is the "local buddy" truth.
+- **Side-by-side route comparison.**
+
+### Plan
+
+- **Physics-based riding-time model.**
+  - Inputs: rider + bike + luggage mass, a comfortable sustained power (or a "touring style" preset), tyre/surface rolling resistance, gradient, and climatological wind for the month.
+  - Output: realistic hours per section, including stop time. Not km/day guesses.
+- **Stage planner.**
+  - Candidate overnight stops: clusters of the rider's preferred accommodation type.
+  - Optimisation: minimise deviation from target daily effort, honouring rest days, must-have services and a bail-out station within N km.
+  - Cost: trivial to compute (dynamic programming over a few hundred candidates), so it runs on device.
+- **Annotated starter GPX per day.** Findings as GPX waypoints ("⚠ busy road 3.2 km", "last water for 38 km"), bridges as alternative tracks. Shows up on Garmin and survives RWGPS/Strava imports.
+- **Book-ahead flags.** Sparse accommodation + peak season + holiday overlap → "book ahead".
+- **Bike and kit advice.**
+  - Tyre width from the surface mix.
+  - Gearing from sustained gradients.
+  - Lights from tunnels and daylight.
+  - Packing list from climate and remoteness.
+- **Getting there and back.** Rail with bikes to the start and from the finish (Transitous/MOTIS), night trains with bike spaces, bike-box storage.
+- **Country practicalities.** Emergency numbers, helmet and hi-vis rules, wild-camping legality (e.g. allemansrätten in the Nordics vs. bans elsewhere), border crossings, entry rules for non-EU riders, and a Schengen-days counter for long trips (on device).
+- **Encrypted share link** for riding partners.
+
+### Go
+
+- **Morning briefing for today's stage.** Weather *at your expected position and time*, wind's effect on riding time, warnings, smoke/air quality, heat ("leave by 07:30 to beat the 34 °C afternoon"), and river levels on flood-prone paths.
+- **"Will it be open when I get there?"** Uses your ETA plus opening hours for the next food, water, bike shop and accommodation.
+- **Bail-out button.** Nearest station with a bike-friendly connection, hospital/pharmacy, 112.
+- **Closure detours.** Precomputed or on-request bypass. The request carries the closure segment, not your location.
+- **Fully offline** (bundle + vector tiles), with live layers when there's signal.
+- **Anonymous rider reports** that feed the next audit.
+
+### B2B (route curators, NECCs, tourism boards)
+
+- **ECS-aligned pre-assessment reports** with maps and evidence. Indicative only; position as complementary to official certification, ideally in partnership with ECF.
+- **Change tracking** between audits ("+38 km developed, 2 gaps closed").
+- **Impact-ranked interventions.** "Fixing these 3.1 km would create 140 km of continuous LTS ≤ 2 route", an output curators struggle to get today.
+- **Service-coverage reports for tourism boards.** "No cyclist-friendly accommodation between km 220 and 290", a business-development opportunity for the region.
+- **Bring-your-own-data layers** (counter data, surveys), exports (GeoJSON, GeoPackage, KML, PDF).
+- **Data-quality feedback to OSM and ECF.** Goodwill, and better data for everyone, including us.
+
+### LLM assistance (bounded, grounded)
+
+- Narrative "local buddy" summaries generated from findings. Every sentence must cite events; no free-form facts.
+- Extracting closures and diversions from multilingual web pages into structured candidates, with a human approval queue.
+- Translating warnings and findings into the rider's language.
+- Natural-language Dream queries turned into structured matchmaker filters.
+- Model: not chosen yet (D7); possibly an open-source / open-weight model. It sits behind a provider-neutral interface, gets evaluated on a sample of EV8 pages and sections before any choice, and is kept out of the core factual pipeline.
+
+### Operations
+
+- Source-health and freshness dashboard.
+- Field-validation mode for your own rides (confirm signage and surface, attach photos, optionally contribute to Mapillary or Panoramax).
+- Audit regression tests on golden routes.
+
+---
+
+## 13. Risks and open questions
+
+| Risk / question | Mitigation / next step |
+|---|---|
+| Real structure of the EuroVelo GPX package and status attributes is not yet known in detail | M0 first task: download and inspect; the adapter isolates the rest of the system from it |
+| ECS criteria details (thresholds) live in the 2026 manual | Encode as tunable rules; consider contacting ECF early. They are a likely partner and B2B customer, and they control the EuroVelo® trademark. |
+| Traffic volume is mostly a proxy (LTS from tags) | Show confidence; add national open counts per country; commercial data for B2B only |
+| Signage is the weakest open-data dimension | Combine status, OSM, imagery and field reports with explicit confidence; never assert "signed" without evidence |
+| Closures have no unified source | Layered approach in 5.6; curated registry first |
+| DEM is a surface model (trees, bridges) | National terrain models where open; bridge/tunnel interpolation; smoothing; validate on known climbs |
+| Licence terms: Open-Meteo (non-commercial), MeteoAlarm redistribution, Mapillary derived data, ODbL share-alike | Licence register in `docs/`; provider interfaces allow swaps; legal review before launch |
+| Valhalla arm64 image availability; Valhalla on Containers | Verify in M0; build from source if needed; VM fallback for production |
+| Laptop capacity (RAM/disk) | Corridor clipping; start with 2–3 routes |
+
+**Questions for you:**
+
+1. ~~Laptop RAM and free disk?~~ Answered: 32 GB / 1 TB (D1).
+2. ~~Two-language split?~~ Confirmed (D2).
+3. ~~First golden routes?~~ EV8, plus EV15 for calibration (D3).
+4. ~~Approach ECF early?~~ Later, after the prototype (D5).
+5. Any budget for paid APIs during the prototype? None should be needed; free non-commercial tiers cover personal testing.
+
+---
+
+## 14. References
+
+- EuroVelo GPX tracks: licence and disclaimer (Dec 2025): <https://pro.eurovelo.com/download/document/EuroVelo%20GPX%20tracks_License%20and%20disclaimer_20251211.pdf>
+- EuroVelo GPX tracks go open data (Oct 2024): <https://pro.eurovelo.com/news/2024-10-09_eurovelo-gpx-tracks-go-open-data>
+- ECS short manual 2026: <https://eurovelo.com/download/document/ECS-short-manual-2026-final.pdf>
+- ECS quality criteria 2021: <https://eurovelo.com/download/document/ECS-quality-criteria-2021.pdf>
+- EV15 Rhine certification report 2025: <https://eurovelo.com/download/document/EuroVelo-15-Rhine-Cycle-Route-Certification-Report-2025.pdf>
+- New look for EuroVelo maps (7-category legend, May 2026): <https://en.eurovelo.com/news/2026-05-27_new-look-for-eurovelo-maps>
+- EuroVelo Data Hub: <https://pro.eurovelo.com/projects/eurovelo-data-hub>
+- Cloudflare Containers GA (Apr 2026): <https://developers.cloudflare.com/changelog/2026-04-13-containers-sandbox-ga>
+- Cloudflare Containers pricing: <https://developers.cloudflare.com/containers/pricing/>
+- Cloudflare Containers limits: <https://developers.cloudflare.com/containers/platform-details/limits/>
+- Cloudflare R2 pricing: <https://developers.cloudflare.com/r2/pricing/>
+- EuroVelo 8 route page: <https://en.eurovelo.com/ev8>

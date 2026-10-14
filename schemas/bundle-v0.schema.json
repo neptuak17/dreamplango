@@ -1,0 +1,768 @@
+{
+  "$defs": {
+    "BundleManifest": {
+      "properties": {
+        "schema_version": {
+          "default": "0.1",
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "pipeline": {
+          "$ref": "#/$defs/PipelineInfo"
+        },
+        "route": {
+          "$ref": "#/$defs/Route"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceSnapshot"
+          },
+          "type": "array"
+        },
+        "attribution": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Logical name -> file name within the bundle directory",
+          "type": "object"
+        },
+        "summary": {
+          "$ref": "#/$defs/RouteSummary"
+        },
+        "finding_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Count per severity",
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "created_at",
+        "pipeline",
+        "route",
+        "sources",
+        "attribution",
+        "files",
+        "summary",
+        "finding_counts"
+      ],
+      "type": "object",
+      "title": "BundleManifest"
+    },
+    "Component": {
+      "description": "A continuous piece of a path. Gaps join two ride components and have zero measured length.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/ComponentKind"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "straight_distance_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For gaps: straight-line distance between the two ride ends"
+        },
+        "daily_section": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source daily section number (rides)"
+        },
+        "start": {
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "end": {
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "seq",
+        "kind",
+        "from_m",
+        "to_m",
+        "length_m",
+        "straight_distance_m",
+        "daily_section",
+        "start",
+        "end"
+      ],
+      "type": "object",
+      "title": "Component"
+    },
+    "ComponentKind": {
+      "enum": [
+        "ride",
+        "gap"
+      ],
+      "type": "string",
+      "title": "ComponentKind"
+    },
+    "CurrentPointer": {
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "updated_at"
+      ],
+      "type": "object",
+      "title": "CurrentPointer"
+    },
+    "DailySection": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "start_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/$defs/EuroVeloStatus"
+        },
+        "reversed_in_source": {
+          "description": "Track was stored end-to-start in the source GPX",
+          "type": "boolean"
+        },
+        "point_count": {
+          "type": "integer"
+        },
+        "start": {
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "end": {
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "start_name",
+        "end_name",
+        "from_m",
+        "to_m",
+        "length_m",
+        "status",
+        "reversed_in_source",
+        "point_count",
+        "start",
+        "end"
+      ],
+      "type": "object",
+      "title": "DailySection"
+    },
+    "DevelopmentLevel": {
+      "enum": [
+        "certified",
+        "developed",
+        "partially_developed",
+        "undeveloped_unknown",
+        "unrecognised"
+      ],
+      "type": "string",
+      "title": "DevelopmentLevel"
+    },
+    "EuroVeloStatus": {
+      "properties": {
+        "development": {
+          "$ref": "#/$defs/DevelopmentLevel"
+        },
+        "signage": {
+          "$ref": "#/$defs/Signage"
+        },
+        "label": {
+          "description": "Status label exactly as published, e.g. 'Developed + Signed'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "development",
+        "signage",
+        "label"
+      ],
+      "type": "object",
+      "title": "EuroVeloStatus"
+    },
+    "Finding": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "data_quality",
+            "route"
+          ],
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Representative location for map display"
+        },
+        "title": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "evidence": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "rule_id",
+        "category",
+        "severity",
+        "from_m",
+        "to_m",
+        "position",
+        "title",
+        "detail",
+        "evidence",
+        "confidence"
+      ],
+      "type": "object",
+      "title": "Finding"
+    },
+    "FindingsFile": {
+      "properties": {
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "findings"
+      ],
+      "type": "object",
+      "title": "FindingsFile"
+    },
+    "Licence": {
+      "properties": {
+        "id": {
+          "description": "SPDX-style identifier, e.g. ODbL-1.0",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "url"
+      ],
+      "type": "object",
+      "title": "Licence"
+    },
+    "PipelineInfo": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object",
+      "title": "PipelineInfo"
+    },
+    "ProfileFile": {
+      "description": "Elevation sampled along the path. Values come from the source GPX and are unverified.",
+      "properties": {
+        "step_m": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        },
+        "m": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "ele": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_m",
+        "source",
+        "m",
+        "ele"
+      ],
+      "type": "object",
+      "title": "ProfileFile"
+    },
+    "Route": {
+      "properties": {
+        "id": {
+          "description": "Global route id, e.g. eurovelo:ev8",
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "ref": {
+          "description": "Display reference, e.g. EV8",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "official_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "network",
+        "ref",
+        "name",
+        "official_url"
+      ],
+      "type": "object",
+      "title": "Route"
+    },
+    "RouteSummary": {
+      "properties": {
+        "ride_length_m": {
+          "type": "number"
+        },
+        "daily_section_count": {
+          "type": "integer"
+        },
+        "gap_count": {
+          "type": "integer"
+        },
+        "gap_straight_distance_m": {
+          "type": "number"
+        },
+        "status_breakdown": {
+          "items": {
+            "$ref": "#/$defs/StatusShare"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ride_length_m",
+        "daily_section_count",
+        "gap_count",
+        "gap_straight_distance_m",
+        "status_breakdown"
+      ],
+      "type": "object",
+      "title": "RouteSummary"
+    },
+    "SectionsFile": {
+      "properties": {
+        "daily": {
+          "items": {
+            "$ref": "#/$defs/DailySection"
+          },
+          "type": "array"
+        },
+        "status": {
+          "items": {
+            "$ref": "#/$defs/StatusSection"
+          },
+          "type": "array"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "type": "array"
+        },
+        "blocks": {
+          "description": "Fixed 50 km live-data blocks as [from_m, to_m]",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "minor": {
+          "description": "Fixed 1 km ECS minor sections as [from_m, to_m]",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "items": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "daily",
+        "status",
+        "components",
+        "blocks",
+        "minor"
+      ],
+      "type": "object",
+      "title": "SectionsFile"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "caution",
+        "warning",
+        "blocker"
+      ],
+      "type": "string",
+      "title": "Severity"
+    },
+    "Signage": {
+      "enum": [
+        "signed",
+        "not_signed",
+        "unknown"
+      ],
+      "type": "string",
+      "title": "Signage"
+    },
+    "SourceSnapshot": {
+      "description": "One downloaded source file, with the provenance needed for attribution and reproducibility.",
+      "properties": {
+        "id": {
+          "description": "Source identifier, e.g. eurovelo-gpx",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "file": {
+          "description": "Path relative to the data directory",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "licence": {
+          "$ref": "#/$defs/Licence"
+        },
+        "attribution": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url",
+        "retrieved_at",
+        "file",
+        "sha256",
+        "bytes",
+        "licence",
+        "attribution"
+      ],
+      "type": "object",
+      "title": "SourceSnapshot"
+    },
+    "StatusSection": {
+      "description": "A run of consecutive daily sections sharing the same published status.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "status": {
+          "$ref": "#/$defs/EuroVeloStatus"
+        },
+        "daily_sections": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "from_m",
+        "to_m",
+        "length_m",
+        "status",
+        "daily_sections"
+      ],
+      "type": "object",
+      "title": "StatusSection"
+    },
+    "StatusShare": {
+      "properties": {
+        "development": {
+          "$ref": "#/$defs/DevelopmentLevel"
+        },
+        "signage": {
+          "$ref": "#/$defs/Signage"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "share": {
+          "description": "Fraction of ridden length, 0-1",
+          "type": "number"
+        }
+      },
+      "required": [
+        "development",
+        "signage",
+        "length_m",
+        "share"
+      ],
+      "type": "object",
+      "title": "StatusShare"
+    }
+  },
+  "description": "Root type used only to export one JSON Schema containing every bundle file type.",
+  "properties": {
+    "manifest": {
+      "$ref": "#/$defs/BundleManifest"
+    },
+    "sections": {
+      "$ref": "#/$defs/SectionsFile"
+    },
+    "findings": {
+      "$ref": "#/$defs/FindingsFile"
+    },
+    "profile": {
+      "$ref": "#/$defs/ProfileFile"
+    },
+    "current": {
+      "$ref": "#/$defs/CurrentPointer"
+    }
+  },
+  "required": [
+    "manifest",
+    "sections",
+    "findings",
+    "profile",
+    "current"
+  ],
+  "type": "object",
+  "title": "BundleContract",
+  "$id": "https://dreamplango.local/schemas/bundle-v0.schema.json"
+}

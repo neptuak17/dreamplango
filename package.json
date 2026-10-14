@@ -1,0 +1,26 @@
+{
+  "name": "dreamplango",
+  "private": true,
+  "description": "DreamPlanGo monorepo: Python audit engine (engine/), TypeScript API (api/) and prototype web app (web/)",
+  "workspaces": [
+    "packages/*",
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "engine:test": "uv run --project engine pytest -q",
+    "engine:lint": "uv run --project engine ruff check engine/src engine/tests",
+    "fetch:ev8": "uv run --project engine dpg fetch eurovelo EV8",
+    "ingest:ev8": "uv run --project engine dpg ingest eurovelo EV8",
+    "contracts": "uv run --project engine dpg schemas && json2ts -i schemas/bundle-v0.schema.json -o packages/contracts/src/bundle.ts --no-additionalProperties --bannerComment \"/* Generated from schemas/bundle-v0.schema.json by `npm run contracts`. Do not edit. */\"",
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @dpg/api\" \"npm run dev -w @dpg/web\"",
+    "build": "npm run build -w @dpg/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run engine:test && npm run test -w @dpg/api"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "json-schema-to-typescript": "^16.0.0",
+    "typescript": "^7.0.2"
+  }
+}

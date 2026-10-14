@@ -1,0 +1,9 @@
+# Keep LF line endings in the working tree on every OS. The repo is used from both Windows and WSL (M1);
+# CRLF breaks shell scripts and shebangs on Linux. Windows PowerShell and editors handle LF fine.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.pdf binary
+*.pmtiles binary
+*.gpx text eol=lf
