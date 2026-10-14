@@ -1,0 +1,114 @@
+# Curated bike-carriage policy for public transport (D20). One row per country, optionally narrowed to an operator
+# (matched case-insensitively against the station's OSM operator/network/name tags). The first matching row wins,
+# so operator rows come before the country default.
+#
+#   bikes: yes | reservation | limited | no | unknown
+#     yes          assembled bikes are carried on the usual regional trains, space permitting
+#     reservation  carried, but a (sometimes seasonal) booking or supplement is required
+#     limited      carried only on some trains or outside peak hours
+#     no           assembled bikes are not carried
+#     unknown      no reliable published policy found
+#   confidence: how far the row can be trusted (high = operator's own page; low = secondary or anecdotal source)
+#
+# Checked 2026-10-14. Rules change often: riders must confirm with the operator before travelling.
+checked: 2026-10-14
+rows:
+  - country: ES
+    operator: Renfe
+    bikes: yes
+    note: >-
+      Assembled bikes travel free without booking on Cercanías/Rodalies, Regional and Proximity trains; Media
+      Distancia and Avant trains with reserved seats need the free "Tren + Bici" add-on. Staff may refuse bikes on
+      crowded trains; Bilbao and San Sebastián Cercanías have their own rules.
+    source: https://www.renfe.com/es/ca/viajar/informacion-util/equipajes/bicicletas-y-patines
+    confidence: high
+  - country: ES
+    operator: FGC|Ferrocarrils
+    bikes: unknown
+    note: Ferrocarrils de la Generalitat de Catalunya; policy not checked.
+    source: null
+    confidence: low
+  - country: ES
+    bikes: yes
+    note: Country default taken from Renfe's rules.
+    source: https://www.renfe.com/es/ca/viajar/informacion-util/equipajes/bicicletas-y-patines
+    confidence: medium
+  - country: FR
+    bikes: yes
+    note: >-
+      TER rules are set by each region. Occitanie (liO): free but compulsory booking every day 1 July-31 August and
+      at weekends and on public holidays the rest of the year (veloabord.fr); otherwise free boarding, space
+      permitting. Sud Provence-Alpes-Côte d'Azur (ZOU!): EUR 1 booking May-September 2026 on some inland lines
+      (Lyon-Marseille, Briançon-Gap-Marseille); the coastal line is not listed. Folding or bagged bikes go free.
+    source: https://www.ter.sncf.com/occitanie/services-contacts/voyager-avec-son-velo/acces-velo-serein
+    confidence: high
+  - country: MC
+    bikes: yes
+    note: Served by TER Sud Provence-Alpes-Côte d'Azur (see France).
+    source: https://www.ter.sncf.com/sud-provence-alpes-cote-d-azur/services-contacts/voyager-avec-velo/reservation-velo
+    confidence: medium
+  - country: IT
+    bikes: yes
+    note: >-
+      Trenitalia regional trains marked with the bike symbol carry assembled bikes, with a EUR 3.50 supplement
+      (several regions make it free). Intercity: EUR 3.50 with compulsory booking. Bagged or folded bikes free.
+    source: https://www.trenitalia.com/en/services/travelling-with-your-bike.html
+    confidence: high
+  - country: SI
+    bikes: yes
+    note: >-
+      SŽ carries bikes with a bike ticket bought from the train staff (sources give EUR 1.50-3). Avoid weekday peaks
+      (06:00-08:00, 14:00-16:00); no bikes on replacement buses.
+    source: https://potniski.sz.si/take-your-bike-on-the-train/
+    confidence: high
+  - country: HR
+    bikes: limited
+    note: >-
+      HŽPP carries bikes only on trains marked for bikes in the timetable, with few spaces and a bike ticket.
+    source: https://hzpp.hr/en/international/bicycle-transport
+    confidence: medium
+  - country: BA
+    bikes: no
+    note: Interrail and Eurail state that bikes are not allowed on trains in Bosnia and Herzegovina.
+    source: https://www.interrail.com/en/plan-your-trip/tips-and-tricks/trains-europe/trains-country/trains-bosnia-herzegovina
+    confidence: medium
+  - country: ME
+    bikes: yes
+    note: Travel guides report bikes on most ŽPCG trains (e.g. Bar-Podgorica) with a bike ticket; not confirmed by the operator.
+    source: https://myinterrail.co.uk/destinations/montenegro/railway-information
+    confidence: low
+  - country: AL
+    bikes: unknown
+    note: Very limited passenger rail; no published bike policy found.
+    source: null
+    confidence: low
+  - country: GR
+    bikes: unknown
+    note: >-
+      No official Hellenic Train bike policy found. Riders report bikes travelling as luggage in the guard's van
+      from Athens. Confirm with Hellenic Train.
+    source: https://cycleblaze.com/journals/atticexplorations/conclusion-some-attic-cycling-faqs
+    confidence: low
+  - country: TR
+    operator: İZBAN|IZBAN|Izban
+    bikes: limited
+    note: İzmir suburban trains; bikes banned in peak hours (07:00-08:30 and 16:00-19:30 in a 2019 report).
+    source: null
+    confidence: low
+  - country: TR
+    bikes: limited
+    note: >-
+      TCDD announced that bikes are carried free of charge, but riders report that many main-line and regional
+      trains still refuse them. Confirm locally.
+    source: https://www.dailysabah.com/turkey/turkeys-trains-will-not-charge-riders-for-their-bicycles/news/amp
+    confidence: low
+  - country: CY
+    bikes: unknown
+    note: Cyprus has no railway.
+    source: null
+    confidence: high
+  - kind: ferry_terminal
+    bikes: yes
+    note: Most passenger and car ferries carry bikes, often for a fee; check the operator and season.
+    source: null
+    confidence: low

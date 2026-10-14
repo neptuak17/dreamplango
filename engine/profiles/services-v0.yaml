@@ -1,0 +1,86 @@
+# Services and access, version 0 (DESIGN.md 11.2, decisions D17-D21).
+#
+# A place COUNTS towards coverage, gap rules and ECS criteria only when its ridden one-way distance from the route
+# is within `count_m` AND its time is within `count_min`. Time = distance at `flat_speed_kmh` plus
+# `climb_min_per_10m` for every 10 m of net climb from the route to the place. Places up to `show_m` are kept for
+# display but do not count. The accommodation limits follow the ECS manual (5 km, or 30 minutes in mountain
+# regions); every other number here is a placeholder to tune.
+id: services-v0
+title: Services and access (v0)
+season_year: 2027          # opening hours are evaluated month by month for this year (the owner's ride year)
+flat_speed_kmh: 15
+climb_min_per_10m: 1.0
+on_route_m: 500            # within this, a place is labelled "on route"
+skip_routing_m: 75         # closer than this to the route: no routing, the straight-line offset is the access
+route_sample_m: 250        # spacing of the route points used as access candidates
+max_sources: 48            # route points tried per place (nearest first)
+overture_min_confidence: 0.6
+
+types:
+  water:
+    title: Drinking water
+    count_m: 500
+    count_min: 3
+    show_m: 1000
+    gap_m: 40000           # finding: a stretch this long with neither a water point nor food/shop
+    gap_also: [food]
+    gap_severity: caution
+  toilets:
+    title: Toilets
+    count_m: 500
+    count_min: 3
+    show_m: 1000
+  repair_station:
+    title: Repair station
+    count_m: 500
+    count_min: 3
+    show_m: 1000
+  food:
+    title: Food and resupply
+    count_m: 1000
+    count_min: 6
+    show_m: 2000
+    gap_m: 50000
+    gap_severity: caution
+  pharmacy:
+    title: Pharmacy
+    count_m: 2000
+    count_min: 12
+    show_m: 3000
+    gap_m: 100000
+    gap_severity: info
+  atm:
+    title: ATM
+    count_m: 2000
+    count_min: 12
+    show_m: 3000
+    gap_m: 100000
+    gap_severity: info
+  accommodation:
+    title: Accommodation
+    count_m: 5000
+    count_min: 30
+    show_m: 8000
+    gap_m: 70000
+    gap_severity: warning
+  bike_shop:
+    title: Bike shop
+    count_m: 5000
+    count_min: 30
+    show_m: 10000
+    gap_m: 150000
+    gap_severity: info
+  station:
+    title: Station (bikes carried)
+    count_m: 5000
+    count_min: 30
+    show_m: 10000
+    bail_out_m: 10000      # a station this close (and within bail_out_min) is a bail-out option
+    bail_out_min: 60
+    bail_out_gap_m: 100000 # finding: a stretch this long with no bail-out station (> 50 km to one either way)
+  hospital:
+    title: Hospital
+    count_m: 20000
+    count_min: null        # reached by any vehicle: no cycling time cap
+    show_m: 20000
+    costing: auto

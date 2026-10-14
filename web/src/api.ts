@@ -5,11 +5,13 @@ import type {
   FindingsFile,
   GapType,
   MinorFile,
+  Place,
   ProfileFile,
   Route,
   RouteSummary,
   ScoresFile,
   SectionsFile,
+  ServicesFile,
   Signage,
 } from "@dpg/contracts";
 
@@ -64,6 +66,25 @@ export interface RouteBundle {
   events: EventsFile | null;
   minor: MinorFile | null;
   scores: ScoresFile | null;
+  /** Services summary (M2); absent in older bundles. */
+  services: ServicesFile | null;
+}
+
+export interface PlacesResponse {
+  season_year: number;
+  total: number;
+  truncated: boolean;
+  places: Place[];
+}
+
+export interface PlaceFilter {
+  fromM: number;
+  toM: number;
+  services: string[];
+  /** 0-11, or null for any month. */
+  month: number | null;
+  /** "counting" keeps only places within the service type's access limits; a number is a max detour in metres. */
+  detour: "counting" | number;
 }
 
 async function get<T>(url: string): Promise<T> {
@@ -83,7 +104,7 @@ export const listRoutes = () => get<{ routes: RouteListing[] }>("/v1/routes").th
 
 export async function loadBundle(network: string, ref: string): Promise<RouteBundle> {
   const base = `/v1/routes/${network}/${ref.toLowerCase()}`;
-  const [manifest, path, sections, findings, profile, events, minor, scores] = await Promise.all([
+  const [manifest, path, sections, findings, profile, events, minor, scores, services] = await Promise.all([
     get<BundleManifest>(base),
     get<PathCollection>(`${base}/path`),
     get<SectionsFile>(`${base}/sections`),
@@ -92,6 +113,30 @@ export async function loadBundle(network: string, ref: string): Promise<RouteBun
     getOptional<EventsFile>(`${base}/events`),
     getOptional<MinorFile>(`${base}/minor`),
     getOptional<ScoresFile>(`${base}/scores`),
+    getOptional<ServicesFile>(`${base}/services`),
   ]);
-  return { manifest, path, sections, findings, profile, events, minor, scores };
+  return { manifest, path, sections, findings, profile, events, minor, scores, services };
+}
+
+export async function loadPlaces(
+  network: string,
+  ref: string,
+  runId: string,
+  filter: PlaceFilter,
+  signal?: AbortSignal,
+): Promise<PlacesResponse> {
+  const q = new URLSearchParams({
+    run: runId,
+    from_km: String(Math.max(0, filter.fromM) / 1000),
+    to_km: String(filter.toM / 1000),
+    service: filter.services.join(","),
+    limit: "5000",
+  });
+  if (filter.month !== null) q.set("month", String(filter.month + 1));
+  if (filter.detour === "counting") q.set("counting", "1");
+  else q.set("max_detour_m", String(filter.detour));
+  const url = `/v1/routes/${network}/${ref.toLowerCase()}/places?${q}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+  return (await res.json()) as PlacesResponse;
 }

@@ -1,4 +1,4 @@
-import type { Finding } from "@dpg/contracts";
+import type { Finding, Place } from "@dpg/contracts";
 import {
   AttributionControl,
   type ExpressionSpecification,
@@ -7,11 +7,13 @@ import {
   LngLatBounds,
   Map as MapLibreMap,
   NavigationControl,
+  Popup,
   ScaleControl,
 } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import type { PathCollection, RideProps } from "./api";
-import { DEVELOPMENT, SEVERITY } from "./status";
+import { distanceLabel, MONTHS, monthState, SERVICE_STYLE, seasonLabel } from "./services";
+import { DEVELOPMENT, km, SEVERITY } from "./status";
 
 const BASEMAP = "https://tiles.openfreemap.org/styles/positron";
 
@@ -37,11 +39,79 @@ interface Props {
   /** Route coloured by an audit layer; null shows the EuroVelo status colouring. */
   overlay: { type: "FeatureCollection"; features: unknown[] } | null;
   findings: Finding[];
+  places: Place[];
+  /** Month (0-11) used to describe opening in place popups; null = any month. */
+  month: number | null;
+  /** The "what's ahead" position, drawn as a marker. */
+  marker: [number, number] | null;
   attribution: string[];
   selectedSection: number | null;
   selectedFinding: string | null;
-  onSelectSection: (section: number | null) => void;
+  selectedPlace: string | null;
+  /** A click on the route line: the section and the clicked point. */
+  onClickRoute: (section: number, lngLat: [number, number]) => void;
+  onClickEmpty: () => void;
   onSelectFinding: (id: string) => void;
+  onSelectPlace: (id: string | null) => void;
+}
+
+function placesGeoJSON(places: Place[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: places.map((p) => ({
+      type: "Feature" as const,
+      properties: { id: p.id, color: SERVICE_STYLE[p.service]?.color ?? "#495057", counts: p.counts },
+      geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
+    })),
+  };
+}
+
+function markerGeoJSON(marker: [number, number] | null) {
+  return {
+    type: "FeatureCollection" as const,
+    features: marker ? [{ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: marker } }] : [],
+  };
+}
+
+function line(parent: HTMLElement, text: string, className?: string) {
+  const el = document.createElement("div");
+  el.textContent = text;
+  if (className) el.className = className;
+  parent.appendChild(el);
+  return el;
+}
+
+/** Popup content built with textContent: names and notes come from open data and must not be parsed as HTML. */
+function placePopup(p: Place, month: number | null): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "place-popup";
+  line(root, p.name ?? `Unnamed ${p.kind.replaceAll("_", " ")}`, "pp-title");
+  line(root, `${p.service.replaceAll("_", " ")} · ${p.kind.replaceAll("_", " ")} · km ${km(p.access_at_m, 1)}`, "pp-sub");
+  const access = p.access_m === null ? "no route found by bike" : `${distanceLabel(p.access_m)} off route`;
+  const time = p.access_min !== null ? `, ~${Math.round(p.access_min)} min` : "";
+  const climb = p.climb_m ? `, +${p.climb_m} m` : "";
+  line(root, `${access}${time}${climb}${p.counts ? "" : " (beyond the counting limit)"}`);
+  const state = monthState(p, month);
+  const season = seasonLabel(p.months);
+  const when = month === null ? "" : `${MONTHS[month]}: ${state === "partly" ? "season starts or ends this month" : state}`;
+  line(root, [when, season ? `season ${season}` : "no published season"].filter(Boolean).join(" · "));
+  if (p.opening_hours) line(root, p.opening_hours, "pp-mono");
+  const d = p.detail as Record<string, unknown>;
+  if (p.service === "station") {
+    line(root, `Bikes: ${String(d.bikes ?? "unknown")} (${String(d.bike_confidence ?? "low")} confidence)`, "pp-strong");
+    if (d.bike_note) line(root, String(d.bike_note), "pp-note");
+  }
+  if (d.temporarily_closed) line(root, "Overture marks this place as temporarily closed.", "pp-note");
+  if (typeof d.website === "string" && /^https?:\/\//.test(d.website)) {
+    const a = document.createElement("a");
+    a.href = d.website;
+    a.textContent = "website";
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    root.appendChild(a);
+  }
+  line(root, `${p.sources.join(", ")} · ${p.confidence} confidence`, "pp-src");
+  return root;
 }
 
 function boundsOf(path: PathCollection, section?: number): LngLatBounds | null {
@@ -74,6 +144,7 @@ function findingsGeoJSON(findings: Finding[]) {
 export function RouteMap(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
+  const popup = useRef<Popup | null>(null);
   const ready = useRef(false);
   const latest = useRef(props);
   latest.current = props;
@@ -170,8 +241,35 @@ export function RouteMap(props: Props) {
           "circle-stroke-width": 1.5,
         },
       });
+      m.addSource("places", { type: "geojson", data: placesGeoJSON(latest.current.places) });
+      m.addLayer({
+        id: "places-selected",
+        type: "circle",
+        source: "places",
+        filter: ["==", ["get", "id"], ""],
+        paint: { "circle-radius": 11, "circle-color": "#1c7ed6", "circle-opacity": 0.3 },
+      });
+      m.addLayer({
+        id: "places",
+        type: "circle",
+        source: "places",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 13, 6],
+          "circle-color": ["get", "color"],
+          "circle-opacity": ["case", ["get", "counts"], 1, 0.35],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 13, 1.5],
+        },
+      });
+      m.addSource("ahead", { type: "geojson", data: markerGeoJSON(latest.current.marker) });
+      m.addLayer({
+        id: "ahead",
+        type: "circle",
+        source: "ahead",
+        paint: { "circle-radius": 8, "circle-color": "#ffffff", "circle-stroke-color": "#1c7ed6", "circle-stroke-width": 4 },
+      });
 
-      const clickable = ["findings", "overlay-line", "route-signed", "route-unsigned"];
+      const clickable = ["places", "findings", "overlay-line", "route-signed", "route-unsigned"];
       for (const layer of clickable) {
         m.on("mouseenter", layer, () => (m.getCanvas().style.cursor = "pointer"));
         m.on("mouseleave", layer, () => (m.getCanvas().style.cursor = ""));
@@ -179,9 +277,10 @@ export function RouteMap(props: Props) {
       m.on("click", (e) => {
         const hits = m.queryRenderedFeatures(e.point, { layers: clickable.filter((id) => m.getLayer(id)) });
         const hit = hits[0];
-        if (!hit) return latest.current.onSelectSection(null);
-        if (hit.layer.id === "findings") latest.current.onSelectFinding(String(hit.properties.id));
-        else latest.current.onSelectSection(Number((hit.properties as RideProps).section));
+        if (!hit) return latest.current.onClickEmpty();
+        if (hit.layer.id === "places") latest.current.onSelectPlace(String(hit.properties.id));
+        else if (hit.layer.id === "findings") latest.current.onSelectFinding(String(hit.properties.id));
+        else latest.current.onClickRoute(Number((hit.properties as RideProps).section), [e.lngLat.lng, e.lngLat.lat]);
       });
 
       ready.current = true;
@@ -191,11 +290,46 @@ export function RouteMap(props: Props) {
 
     return () => {
       ready.current = false;
+      const open = popup.current;
+      popup.current = null;
+      open?.remove();
       m.remove();
       map.current = null;
     };
     // Rebuilt only when the route itself changes; other props are applied by the effects below.
   }, [props.path]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    (m.getSource("places") as GeoJSONSource | undefined)?.setData(placesGeoJSON(props.places));
+  }, [props.places]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    (m.getSource("ahead") as GeoJSONSource | undefined)?.setData(markerGeoJSON(props.marker));
+  }, [props.marker]);
+
+  useEffect(() => {
+    const m = map.current;
+    const old = popup.current;
+    popup.current = null; // before remove(): its close event must not clear the new selection
+    old?.remove();
+    if (!m || !ready.current) return;
+    m.setFilter("places-selected", ["==", ["get", "id"], props.selectedPlace ?? ""]);
+    const p = props.places.find((x) => x.id === props.selectedPlace);
+    if (!p) return;
+    const pop = new Popup({ closeButton: true, maxWidth: "300px", offset: 10 })
+      .setLngLat([p.lon, p.lat])
+      .setDOMContent(placePopup(p, props.month))
+      .addTo(m);
+    pop.on("close", () => {
+      if (popup.current === pop) latest.current.onSelectPlace(null);
+    });
+    popup.current = pop;
+    if (!m.getBounds().contains([p.lon, p.lat])) m.easeTo({ center: [p.lon, p.lat] });
+  }, [props.selectedPlace, props.places, props.month]);
 
   useEffect(() => {
     const m = map.current;

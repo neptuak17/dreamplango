@@ -2,15 +2,20 @@
 
 Route audits and Dream–Plan–Go trip support for long-distance cycle routes, starting with EuroVelo 8. Design, decisions and roadmap: [docs/DESIGN.md](docs/DESIGN.md).
 
-**Status:** milestone M1 (infrastructure audit). The engine matches the official EV8 track to OpenStreetMap and produces several layers. A local API serves the results, and a web viewer shows them on a map and in a strip diagram.
-- Layers: infrastructure, surface, traffic stress, waymarked network, gradient, typed gaps (ferry, rail link, missing), climbs and an indicative ECS-style check.
+**Status:** milestone M2 (services and access). The engine matches the official EV8 track to OpenStreetMap and produces several layers. A local API serves the results, and a web viewer shows them on a map and in a strip diagram.
+- Layers (M1): infrastructure, surface, traffic stress, waymarked network, gradient, typed gaps (ferry, rail link, missing), climbs and an indicative ECS-style check.
+- Services (M2):
+  - places from OSM and Overture (water, food, toilets, accommodation, bike shops, repair stations, stations, pharmacies, ATMs, hospitals), each with its ridden detour from the route and its season by month;
+  - stations with a curated bike-carriage policy;
+  - services-gap, seasonal-gap and bail-out findings, and the ECS services criteria;
+  - in the viewer, a "what's ahead from km X" list.
 
 ## Layout
 
 | Path | What |
 |---|---|
 | `engine/` | Python Route Audit Engine (`dpg` CLI). **Runs in Ubuntu (WSL)** via `scripts/dpg` |
-| `engine/profiles/` | Rules profiles (`eurovelo-ecs-v0.yaml`) and route-specific knowledge (`routes/*.yaml`) |
+| `engine/profiles/` | Rules profiles (`eurovelo-ecs-v0.yaml`, `services-v0.yaml`), route-specific knowledge (`routes/*.yaml`) and the bike-carriage table (`transport/bike-carriage.yaml`) |
 | `infra/valhalla/` | Docker Compose for the local Valhalla map-matching service (`scripts/valhalla`) |
 | `api/` | TypeScript HTTP API (Hono). Runs on Windows Node now, Cloudflare Workers later |
 | `web/` | Prototype viewer (Vite + React + MapLibre) |
@@ -37,7 +42,7 @@ npm run engine:sync    # create the engine's Linux virtualenv
 npm run fetch:ev8      # official EV8 GPX
 npm run osm:ev8        # download OSM country extracts (~10.6 GB) and cut the 15 km corridor
 npm run valhalla:up    # start Valhalla; the first start builds routing tiles from the corridor
-npm run audit:ev8      # match, derive layers, terrain (downloads Copernicus DEM tiles), rules -> bundle
+npm run audit:ev8      # match, layers, terrain (Copernicus DEM), services (Overture + detour routing), rules -> bundle
 npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhost:5173
 ```
 
@@ -55,4 +60,4 @@ npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhos
 
 ## Data attribution
 
-Bundles contain information from EuroVelo GPX tracks downloaded from www.EuroVelo.com and from OpenStreetMap (© OpenStreetMap contributors), both under the Open Database License (ODbL). Elevation: Copernicus DEM GLO-30. See [docs/DATA-LICENSES.md](docs/DATA-LICENSES.md). EuroVelo® is a registered trademark of the European Cyclists' Federation. This project is not affiliated with or endorsed by ECF.
+Bundles contain information from EuroVelo GPX tracks downloaded from www.EuroVelo.com and from OpenStreetMap (© OpenStreetMap contributors), both under the Open Database License (ODbL). Places also come from Overture Maps Foundation, including Foursquare OS Places (Apache-2.0, © Foursquare Labs, Inc.). Elevation: Copernicus DEM GLO-30. See [docs/DATA-LICENSES.md](docs/DATA-LICENSES.md). EuroVelo® is a registered trademark of the European Cyclists' Federation. This project is not affiliated with or endorsed by ECF.

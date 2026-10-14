@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-BUNDLE_SCHEMA_VERSION = "0.2"
+BUNDLE_SCHEMA_VERSION = "0.3"
 
 LonLat = tuple[float, float]
 
@@ -314,6 +314,85 @@ class ScoresFile(Model):
     climbs: list[Climb]
 
 
+class ServiceType(Model):
+    """A kind of service along the route, with the access limits that decide whether a place counts (D17)."""
+
+    id: str
+    title: str
+    count_m: float = Field(description="Ridden one-way distance within which a place counts")
+    count_min: float | None = Field(description="Time cap (flat speed plus climbing) for counting; null = none")
+    show_m: float = Field(description="Places up to this ridden distance are kept for display")
+    costing: Literal["bicycle", "auto"]
+    gap_m: float | None = Field(description="A stretch this long without the service gives a finding")
+    gap_also: list[str] = Field(description="Other services that also fill this one's gaps (shops sell water)")
+
+
+class Place(Model):
+    """A service near the route (conflated from OSM and Overture), located on the route's measure axis.
+
+    `months` holds one letter per month of the season year (D18): o = open, p = partly (the season starts or ends
+    that month), c = closed, ? = unknown.
+    """
+
+    id: str
+    service: str
+    kind: str = Field(description="Subtype, e.g. campsite, hotel, supermarket, cafe")
+    name: str | None
+    lon: float
+    lat: float
+    at_m: float = Field(description="Measure of the closest route point")
+    offset_m: float = Field(description="Straight-line distance from the route")
+    side: Literal["left", "right", "on"]
+    access_m: float | None = Field(description="Ridden one-way distance from the route; null if no route found")
+    access_min: float | None = Field(description="Minutes at touring pace including climbing (D17)")
+    climb_m: float | None = Field(description="Net climb from the access point to the place")
+    access_at_m: float = Field(description="Measure where the rider leaves the route for this place")
+    counts: bool = Field(description="Within the service type's counting limits")
+    on_route: bool
+    months: str = Field(description="12 letters, January first: o open, p partly, c closed, ? unknown")
+    opening_hours: str | None
+    country: str | None = Field(description="ISO 3166-1 alpha-2")
+    sources: list[str] = Field(description="Source record ids, e.g. osm:n123, overture:<id>")
+    confidence: Confidence
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlacesFile(Model):
+    season_year: int
+    places: list[Place]
+
+
+class SectionServices(Model):
+    number: int
+    counts: dict[str, int] = Field(description="Service id -> places that count on this daily section")
+    longest_gap_m: dict[str, list[float]] = Field(
+        description="Service id -> longest stretch inside the section without the service, per month (Jan-Dec)"
+    )
+    unknown_hours: dict[str, float] = Field(description="Service id -> share of counted places with unknown months")
+
+
+class ServiceGap(Model):
+    """A stretch without a service, at least half as long as the stretch that triggers a finding."""
+
+    service: str = Field(description="Service id, or bail_out for stations that carry bikes within bail-out reach")
+    month: int | None = Field(description="0-11: counting places not known closed that month; null: any month")
+    from_m: float
+    to_m: float
+    threshold_m: float = Field(description="Gap length that triggers a finding for this service")
+
+
+class ServicesFile(Model):
+    rules_profile: str
+    season_year: int
+    types: list[ServiceType]
+    route_longest_gap_m: dict[str, list[float]] = Field(description="Service id -> longest gap per month")
+    sections: list[SectionServices]
+    gaps: list[ServiceGap]
+    season_known: dict[str, float] = Field(
+        description="Service id -> share of counted places whose opening season is published (any month known)"
+    )
+
+
 class CurrentPointer(Model):
     run_id: str
     updated_at: datetime
@@ -329,4 +408,6 @@ class BundleContract(Model):
     events: EventsFile
     minor: MinorFile
     scores: ScoresFile
+    places: PlacesFile
+    services: ServicesFile
     current: CurrentPointer

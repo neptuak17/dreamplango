@@ -1,6 +1,6 @@
 # DreamPlanGo — System Design (V1 proposal)
 
-**Status:** Draft for review, 2026-10-14 (v2: decisions D1–D4 recorded). No code has been written yet.
+**Status:** Living design, 2026-10-14. Decisions D1–D21 are recorded below, and milestones M0–M2 are built (section 11).
 **Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports).
 
 ---
@@ -44,6 +44,12 @@
 | D13 | 2026-10-14 | **Traffic stress uses an LTS heuristic (v0), and the ECS-style rules (v0) use placeholder thresholds.** Both are labelled indicative everywhere and live in readable code and YAML (`engine/profiles/`) for tuning. |
 | D14 | 2026-10-14 | **The engine runs in Ubuntu (WSL).** It is invoked through `scripts/dpg`, with its virtualenv in `~/.venvs/dpg-engine` and its data in `~/dpg-data`. Valhalla runs in Docker there too (`scripts/valhalla`). The Windows API reads bundles through `\\wsl.localhost\…`, configured in `.env`. |
 | D15 | 2026-10-14 | **OSM extracts are chosen automatically:** Geofabrik country extracts (regions with an ISO code) within 3 km of the route, cut to a 15 km corridor. For EV8 that is 12 countries (10.6 GB downloaded, a 1 GB corridor). |
+| D16 | 2026-10-14 | **Places come from OSM and Overture.** Overture's places theme already merges records from Foursquare OS Places, Meta, AllThePlaces and others. That gives us Foursquare coverage without the account that Foursquare's own downloads now require (a gated Hugging Face dataset, or its Places Portal). A direct Foursquare adapter waits until the owner decides to create that account. Places are conflated as described in 11.2. |
+| D17 | 2026-10-14 | **Access limits per service type** (agreed with the owner). The ridden one-way distance and a time cap decide whether a place counts towards coverage and gap rules; see the table in 11.2. The accommodation limit follows ECS (5 km, or 30 minutes in the mountains). The others are placeholders. |
+| D18 | 2026-10-14 | **Seasonality is a 12-month code per place.** OSM `opening_hours` (or `seasonal=*`) is evaluated month by month for the reference year 2027, the ride year. Each month is open, partly (the season starts or ends that month, i.e. a closed stretch of a week or more next to open days), closed or unknown. Unknown counts as available, never as closed, and every gap finding says how much of it rests on unknown hours. Overture has no opening hours. |
+| D19 | 2026-10-14 | **Bundles stay file-based in M2.** They add `places.json` and `services.json`. The API loads the places file once per bundle and serves it through a filtered endpoint, so the browser never downloads all of it. SQLite still waits for the iOS offline packs. |
+| D20 | 2026-10-14 | **Public transport in M2 means stations plus a curated bike-carriage table, without timetables.** Stations (rail, plus ferry terminals) come from OSM. Whether bikes are carried comes from an in-repo table per country and operator, each row with its source and check date. ECS also requires 2 to 4 services a day, which needs GTFS feeds, so that part of the criterion is reported as not checked. |
+| D21 | 2026-10-14 | **The services criteria use the wording of the 2026 ECS short manual.** That means accommodation, food and water, and cycle repair on every daily section; toilets every 15 km; and bikes on public transport at least every 150 km (essential) or 75 km (important). "On a daily section" means a place within the D17 limits, located along that section. |
 
 ---
 
@@ -436,7 +442,7 @@ As built in M0, the engine has `config`, `models`, `contracts`, `lrs/`, `ingest/
 
 A pointer file per route marks the "current" bundle. Publishing is an atomic pointer swap, and rollback is trivial.
 
-**Bundle v0 (M0, D10):** `manifest.json`, `path.geojson` (ride components, plus gap connectors between them), `sections.json` (daily, status, components, 50 km blocks, 1 km minor sections), `findings.json` and `profile.json` (elevation every 200 m). The schema is in `schemas/bundle-v0.schema.json`, and the TS types are generated into `packages/contracts`.
+**Bundle v0 (M0, D10):** `manifest.json`, `path.geojson` (ride components, plus gap connectors between them), `sections.json` (daily, status, components, 50 km blocks, 1 km minor sections), `findings.json` and `profile.json` (elevation every 200 m). The schema is in `schemas/bundle-v0.schema.json`, and the TS types are generated into `packages/contracts`. M1 added `events.json`, `minor.json` and `scores.json` (D11). M2 adds `places.json` and `services.json` (D19), and the API serves places through `GET /v1/routes/{network}/{ref}/places` with filters.
 
 ### 7.2 API sketch (v1)
 
@@ -603,7 +609,7 @@ Milestones are ordered so you can see something in the browser early and tune as
 |---|---|---|
 | **M0** ✅ 2026-10-14 | Foundations | Repo, task scripts, schemas, data-licence register. EuroVelo GPX inspected and ingested (see `docs/notes/eurovelo-gpx.md`). LRS core (measure, locate, project, slice, resample, sections) with property tests. Bundle v0 for EV8, a Hono API, and a React/MapLibre viewer with section list, findings and elevation profile. Natively on Windows; WSL2/Docker moved to M1 (D9). |
 | **M1** ✅ 2026-10-14 | Infrastructure audit | Corridor extraction; Valhalla matching; layers: infrastructure type, surface, traffic stress (LTS), elevation and gradient, waymarked network (OSM relations), continuity and typed gaps. ECS-style rules v0, scores, findings. Bundle files per D11. Prototype: map coloured by layer, **strip diagram** under the elevation profile, stats card, findings linked to the map. **Known limits, carried forward:** <ul><li>The DEM is sampled along the published track, not the matched road, so some coastal values may be cliff artefacts.</li><li>No national LiDAR terrain models yet.</li><li>Signage evidence is EuroVelo status plus OSM relations only (no guideposts or imagery).</li><li>LTS is heuristic, with no traffic counts.</li><li>Straight-line placeholders are not routed around.</li><li>Seasonality moved to M2.</li></ul> |
-| **M2** | Services & access | Places conflation (OSM + Overture + Foursquare), seasonal opening, detour distances, stations + curated bike policy, services-gap and bail-out rules. Prototype: "what's ahead from km X" panel and services filters. |
+| **M2** ✅ 2026-10-14 | Services & access | Places conflation (OSM + Overture, which includes Foursquare: D16), seasonal opening, detour distances, stations + curated bike policy, services-gap and bail-out rules. Prototype: "what's ahead from km X" panel and services filters. See 11.2 and the M2 results in `docs/notes/eurovelo-gpx.md`. **Known limits, carried forward:** <ul><li>Opening seasons are published for only ~2% of accommodation (OSM; Overture has none), so seasonal gaps are mostly unknown. Candidate fixes: campsite directories, DATAtourisme for France, field reports.</li><li>No timetables yet (GTFS), so ECS service frequency is not checked; buses and taxis are not counted for bail-out.</li><li>Bike policy for Greece and Albania is unknown, and Türkiye's is low-confidence.</li><li>Ferry terminals count as bike-carrying by default (low confidence).</li><li>Climb to a place is net elevation difference, not the climb along the detour.</li><li>No cyclist-friendly labels (Accueil Vélo etc.) yet.</li></ul> |
 | **M3** | Dream data | Climate normals per daily section × month, daylight, wind relative to heading, direction advice, school holidays, ferry/campsite seasons, attractiveness and remoteness layers. Prototype: **best-time heatmap** (sections × months) and a section **matchmaker** query. |
 | **M4** | Plan | `packages/planner` with stage planner and riding-time model; annotated per-day GPX export; bridge suggestions for gaps. Prototype: plan a trip, compare plans. |
 | **M5** | Go simulation | Live providers (forecast grid by block, MeteoAlarm, CAMS, FIRMS/EFFIS, river gauges, closures registry, OSM change monitor). Prototype: **"simulate being at km X on date/time Y"**, showing the briefing a rider would see. |
@@ -638,6 +644,76 @@ Riding it in autumn exercises exactly the parts of the audit that other apps ign
 - **Rules tuning panel:** edit thresholds, re-run stage 7 and compare.
 - **Run history** and source-health page (which feeds failed, how stale each snapshot is).
 - **Golden routes:** 3 calibration routes with snapshot tests, so tuning one route doesn't silently break another. Suggested: EV15 certified section, a rough EV1 Iberian section, and a route you have ridden yourself.
+
+### 11.2 M2 design: services and access
+
+**Service types and access limits (D17).** A place counts towards coverage, gap rules and ECS criteria only if both its ridden one-way distance and its time are within the limits below. Anything within 500 m is labelled "on route". Places up to the display distance are kept, so the prototype's max-detour filter can show them, but they don't count.
+
+| Service | OSM / Overture examples | Counts if within | Time cap | Display up to |
+|---|---|---|---|---|
+| Drinking water | `amenity=drinking_water`, `water_point`, taps and fountains with `drinking_water=yes` | 500 m | 3 min | 1 km |
+| Toilets | `amenity=toilets`; Overture `public_restroom` | 500 m | 3 min | 1 km |
+| Repair station | `amenity=bicycle_repair_station`; tube vending machines | 500 m | 3 min | 1 km |
+| Food and resupply | supermarket, convenience, bakery, café, restaurant, fast food, bar | 1 km | 6 min | 2 km |
+| Pharmacy | `amenity=pharmacy` | 2 km | 12 min | 3 km |
+| ATM | `amenity=atm`, banks with `atm=yes` | 2 km | 12 min | 3 km |
+| Accommodation | hotel, guest house/B&B, hostel, campsite, alpine hut | **5 km** | **30 min** (ECS) | 8 km |
+| Bike shop | `shop=bicycle`; Overture `bike_store`, `bike_repair_maintenance` | 5 km | 30 min | 10 km |
+| Station (bikes carried) | `railway=station/halt`, `amenity=ferry_terminal` | 5 km; 10 km for bail-out | 30 min; 60 min for bail-out | 10 km |
+| Hospital | `amenity=hospital`; Overture `hospital`, `emergency_department` | 20 km **by road** | not applied (any vehicle) | 20 km |
+
+**Measuring access.**
+- **Candidates.** Places come from the OSM corridor extract and from Overture (queried with DuckDB per 50 km block of the route, filtered by category). Each is projected onto the route (`at_m`, `offset_m`, `side`). A place is kept if its straight-line offset is within the display distance; the ridden distance is never shorter than that.
+- **Ridden distance.** Valhalla `sources_to_targets` with the same bicycle costing as matching. The sources are route points every 250 m within reach of the place, and the shortest one wins, so a campsite across a river is reached by the bridge. That route point is the place's access point (`access_at_m`). Places within 75 m of the route skip routing. Hospitals use car routing.
+- **Time.** 15 km/h on the flat, plus 1 minute per 10 m of net climb from the access point to the place, using the DEM minimum around each point so that roofs don't count. Valhalla's own times ignore hills, because our tiles carry no elevation.
+- **Unreachable places.** If routing finds no path (an island, or no road within 500 m of the place), the place is shown but doesn't count, and is marked as such.
+
+**Conflation (D16).**
+- A match needs the same service type, and either a distance within 75 m (150 m for accommodation, whose areas are large) with a similar name (rapidfuzz `token_set_ratio` ≥ 70), or a distance within 25 m when either side has no name.
+- OSM supplies the position, name and opening hours; Overture adds its id, confidence and sources.
+- Overture-only places need confidence ≥ 0.6, and Overture's `permanently_closed` places are dropped. Holiday rentals are excluded, since they rarely take one-night stays (ECS).
+- Place confidence: both sources agree, high; OSM only, medium; Overture only, medium if its confidence ≥ 0.9, otherwise low.
+
+**Seasonality (D18).** Months are coded `o` (open), `p` (partly), `c` (closed) or `?` (unknown) for the reference year 2027:
+- `opening_hours` is evaluated per month:
+  - any open interval means open;
+  - open days plus a closed stretch of 7 days or more means partly, e.g. October for "Apr 14 – Oct 15";
+  - a fully closed month means closed.
+- `seasonal=no` means open all year.
+- `seasonal=summer` means open June–August, with the other months unknown.
+- `seasonal=yes` without hours means every month is unknown.
+
+Each service gap is computed for each month, counting places whose month code isn't `c`.
+
+**Rules.**
+- **ECS services criteria (D21),** per daily section, laid onto the 1 km minor sections:
+
+  | Criterion | Tier | Passes when |
+  |---|---|---|
+  | `accommodation` | essential | at least one counted accommodation |
+  | `food_water` | essential | at least one counted food place |
+  | `bike_repair` | essential | a bike shop or a repair station |
+  | `pt_access` | essential | a bike-carrying station at least every 150 km |
+  | `accommodation_choice` | important | an accommodation that isn't a campsite |
+  | `repair_shop` | important | a bike shop |
+  | `toilets` | important | toilets at least every 15 km |
+  | `pt_access_75` | important | a bike-carrying station at least every 75 km |
+
+  Service frequency is not checked (D20).
+- **Services gaps** (placeholders in `engine/profiles/services-v0.yaml`): water 40 km, food 50 km, accommodation 70 km, bike shop 150 km, ATM and pharmacy 100 km. A stretch longer than this without the service gives one finding. A **seasonal gap** finding lists the months in which known closures make the gap exceed the threshold although it doesn't all year.
+- **Bail-out:** a stretch more than 50 km from a bike-carrying station in both directions (i.e. a station gap over 100 km, counting the 10 km bail-out access) gives a caution.
+
+**Outputs (D19).**
+- `places.json`: one record per place with `service`, `kind`, `name`, position, `at_m`, `offset_m`, `side`, `access_m`, `access_min`, `climb_m`, `access_at_m`, `counts`, the month code, the raw `opening_hours`, sources, confidence, and details such as the bike policy, stars, the cyclist-friendly label or the website.
+- `services.json`: the service types with their limits; per daily section, the count of counted places and the longest gap per service for each month.
+
+**API and prototype.**
+- `GET /v1/routes/{network}/{ref}/places?service=&from_km=&to_km=&max_detour_m=&month=&counting=` serves filtered places.
+- The prototype adds:
+  - a **services panel**: service toggles, month, and a max-detour filter that defaults to the counting limits;
+  - a **"what's ahead from km X"** list: click the map or the strip to set X; it shows the next place of each type with its distance along the route and its detour;
+  - places on the map;
+  - services stats per section.
 
 ---
 

@@ -74,6 +74,62 @@ There are also 15 breaks shorter than 1 km, mostly under 300 m. All are disconti
 - **Indicative ECS-style check (placeholder thresholds):** 71% of the length meets all essential criteria and 17% all important ones. Important criteria fail mostly on signage (44% of the length is published as not signed) and low traffic.
 - **Terrain:** about 63,500 m of climbing over the whole route. The steepest sustained grades are in the mountain sections: Troodos in Cyprus, Velebit in Croatia, Montenegro, and the Albanian coast around Llogara. Some coastal values may still be cliff artefacts, because the DEM is sampled along the published track rather than the matched road.
 
+## M2 services results (bundle 2026-10-14)
+
+Places come from OSM and Overture release 2026-09-23.1. Overture contributes Meta, Foursquare, AllThePlaces and others.
+
+- **Candidates and kept places:**
+  - 208,517 OSM and 378,048 Overture candidates in the corridor.
+  - After conflation, and within each service's display distance by bike, **158,174 places** were kept.
+  - The detours took 3,558 Valhalla matrix requests: about 5 minutes on the first run, cached afterwards.
+
+- **Places by service:**
+
+  | Service | Kept | Count (within the access limits) |
+  |---|---:|---:|
+  | Food and resupply | 102,354 | 64,181 |
+  | Accommodation | 29,007 | 24,773 |
+  | Pharmacies | 7,919 | |
+  | ATMs | 5,728 | |
+  | Hospitals | 4,328 | |
+  | Drinking water | 3,588 | |
+  | Toilets | 2,149 | |
+  | Bike shops | 1,928 | |
+  | Stations and ferry terminals | 1,013 | 759 |
+  | Repair stations | 160 | |
+
+  The counted stations break down by bike policy as 645 yes, 56 limited and 58 unknown.
+
+- **ECS services criteria:**
+  - Accommodation, food and water, and accommodation choice pass on 100% of the length.
+  - Cycle repair passes on 87%, toilets every 15 km on 90%.
+  - Bikes on public transport pass on 81% at 150 km spacing and 57% at 75 km.
+  - With these criteria added, the indicative **essential pass falls from 71% to 55%** and the important pass from 17% to 12%.
+
+- **Longest gaps, whole route:**
+  - Water (taps, or shops and cafés): 32 km.
+  - Food: 51 km, in Cyprus between Polis and Kykkos (Troodos).
+  - Accommodation: 45 km, so no gap finding.
+  - Bike shop: 303 km, from Rijeka to Zadar over Velebit.
+
+- **Bail-out:** 14 stretches over 100 km have no station known to carry bikes within 10 km. They are:
+  - Spain, from Málaga to Águilas (Almería has few railways).
+  - Catalonia, around L'Escala.
+  - Provence, from Manosque to Draguignan.
+  - Velebit.
+  - Albania.
+  - Epirus–Aitoloakarnania.
+  - Rio–Perama.
+  - İzmir–Çeşme.
+  - From Selçuk to Cyprus. Cyprus has no railway, and buses are not modelled.
+
+  The Rio–Perama stretch does have stations: the Corinth–Athens suburban line, which EuroVelo recommends. They don't count because no official Hellenic Train bike policy was found. Confirming that policy is the most useful next check for the ride.
+
+- **Seasons are rarely published:**
+  - Only 1.8% of accommodation and 11% of food places have opening hours or a season in OSM; Overture has none.
+  - 69 of 1,670 counted campsites publish a season. In October, 13 are closed and 6 close mid-month, for example "Apr 14 – Oct 15".
+  - So the seasonal-gap rule finds nothing yet. That's a data gap, not evidence that everything is open; the viewer says so.
+
 ## Consequences for the engine
 
 - Treat the GPX as the reference itinerary, but never as precise geometry. M1 map-matches it to OSM, and replaces straight-line segments with the matched or routed line (flagged as such).

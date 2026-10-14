@@ -1,9 +1,9 @@
 # Indicative ECS-style check, version 0.
 #
 # Structure follows the EuroVelo European Certification Standard: 1 km minor sections, criteria grouped into
-# "essential" (must hold on 100% of the route) and "important" (at least 70%). The THRESHOLDS BELOW ARE
-# PLACEHOLDERS chosen for plausibility; they have not been checked against the ECS manual. Results are an
-# indicative audit, not an ECS assessment.
+# "essential" (must hold on 100% of the route) and "important" (at least 70%). The infrastructure thresholds
+# below are PLACEHOLDERS chosen for plausibility (D13); the services and public-transport criteria follow the
+# wording of the 2026 ECS short manual (D21). Results are an indicative audit, not an ECS assessment.
 id: eurovelo-ecs-v0
 title: Indicative ECS-style check (v0, placeholder thresholds)
 minor_section_m: 1000
@@ -44,6 +44,44 @@ criteria:
     tier: important
     title: Signposting
     description: EuroVelo publishes the daily section as signed.
+
+  # Services and public transport (D21). Wording follows the 2026 ECS short manual; "on a daily section" means a
+  # place within the access limits of engine/profiles/services-v0.yaml whose access point lies on that section.
+  accommodation:
+    tier: essential
+    title: Accommodation
+    description: At least one campsite, budget or standard accommodation on the daily section.
+  food_water:
+    tier: essential
+    title: Food and water
+    description: At least one restaurant, bar, café or shop on the daily section.
+  bike_repair:
+    tier: essential
+    title: Cycle repair
+    description: A bike shop, spare-parts machine or repair station on the daily section.
+  pt_access:
+    tier: essential
+    title: Public transport
+    description: A station that carries bikes at least every 150 km (service frequency not checked).
+    max_gap_m: 150000
+  accommodation_choice:
+    tier: important
+    title: Accommodation choice
+    description: Accommodation other than camping on the daily section.
+  repair_shop:
+    tier: important
+    title: Bike repair shop
+    description: At least one bike shop on the daily section.
+  toilets:
+    tier: important
+    title: Toilets
+    description: Toilets (public, or in a restaurant or café) at least every 15 km.
+    max_gap_m: 15000
+  pt_access_75:
+    tier: important
+    title: Public transport (75 km)
+    description: A station that carries bikes at least every 75 km (service frequency not checked).
+    max_gap_m: 75000
 
 findings:
   busy_road_min_m: 1000

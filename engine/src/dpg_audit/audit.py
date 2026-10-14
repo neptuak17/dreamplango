@@ -1,4 +1,5 @@
-"""The M1 infrastructure audit: match the route to OSM, derive layers, classify gaps, add terrain, apply rules."""
+"""The audit: match the route to OSM, derive layers, classify gaps, add terrain (M1), add services and access (M2),
+apply rules."""
 
 import json
 import time
@@ -22,9 +23,12 @@ from dpg_audit.osmdata import load as load_osm
 from dpg_audit.rules.evaluate import evaluate, section_scores, stretch_stats
 from dpg_audit.rules.findings import gap_findings, rule_findings, to_findings
 from dpg_audit.rules.profile import load_route_config, load_rules
+from dpg_audit.services import coverage
+from dpg_audit.services.pipeline import build_places, services_file
+from dpg_audit.services.profile import load_services
 from dpg_audit.sources import dem
 
-PIPELINE = "dpg-audit/m1-infrastructure"
+PIPELINE = "dpg-audit/m2-services"
 
 
 @dataclass
@@ -47,6 +51,8 @@ def run(
     valhalla_url: str,
     workers: int,
     rules_name: str = "eurovelo-ecs-v0",
+    services_name: str = "services-v0",
+    overture_release: str | None = None,
 ) -> AuditResult:
     t: dict[str, float] = {}
     t0 = time.perf_counter()
@@ -65,7 +71,6 @@ def run(
     tileset = str(status.get("tileset_last_modified", "unknown"))
     _log(f"matching {len(build.lines)} sections with Valhalla {status.get('version')} …")
     matches = match_lines(client, build.lines, wd / "match", tileset, workers)
-    client.close()
     t["match"] = time.perf_counter() - t0
 
     way_ids = {p.edge["way_id"] for m in matches for p in m.pieces if p.edge and "way_id" in p.edge}
@@ -85,8 +90,27 @@ def run(
     climbs = elevation.climbs(profs, untrusted=untrusted)
     t["terrain"] = time.perf_counter() - t0 - sum(t.values())
 
+    svc_profile = load_services(services_name)
+    services = build_places(
+        root,
+        wd,
+        build,
+        profs,
+        client,
+        tileset,
+        snap.sha256,
+        svc_profile,
+        workers=workers,
+        overture_release=overture_release,
+        log=_log,
+    )
+    client.close()
+    _log("places kept: " + ", ".join(f"{k} {v:,}" for k, v in services.counts.items()))
+    t["services"] = time.perf_counter() - t0 - sum(t.values())
+
     events = sorted(matched.events + grad, key=lambda e: (e.layer, e.from_m))
     minor = evaluate(rules, events, build.daily, build.components, build.path.length)
+    coverage.apply_criteria(services.coverage, minor, build.daily, rules)
     scores = ScoresFile(
         rules_profile=rules.id,
         criteria=rules.criterion_info(),
@@ -99,6 +123,7 @@ def run(
         kept
         + gap_findings(build.components, notes)
         + rule_findings(rules, build.path, events, climbs, build.daily, scores.sections, matches)
+        + coverage.findings(services.coverage, build.path.locate)
     )
 
     ms = np.concatenate([np.append(np.arange(p.from_m, p.to_m, PROFILE_STEP_M), p.to_m) for p in build.path.parts])
@@ -120,16 +145,16 @@ def run(
     )
     valhalla_source = SourceSnapshot(
         id="valhalla",
-        title=f"Valhalla {status.get('version')} map matching (tiles {tileset})",
+        title=f"Valhalla {status.get('version')} map matching and access routing (tiles {tileset})",
         url=valhalla_url,
         retrieved_at=snap.retrieved_at,
         file="-",
         sha256="n/a",
         bytes=0,
         licence=Licence(id="MIT", name="MIT License", url="https://github.com/valhalla/valhalla/blob/master/COPYING"),
-        attribution="Map matching by Valhalla (MIT)",
+        attribution="Map matching and routing by Valhalla (MIT)",
     )
-    sources = [snap, *osm_sources, dem.snapshot(root, len(tiles)), valhalla_source]
+    sources = [snap, *osm_sources, *services.sources, dem.snapshot(root, len(tiles)), valhalla_source]
     run_id, out = write_bundle(
         build,
         sources,
@@ -140,6 +165,8 @@ def run(
         events=EventsFile(layers=classify.LAYERS, events=events),
         minor=minor,
         scores=scores,
+        places=services.file,
+        services=services_file(services, build, svc_profile),
     )
     t["rules+write"] = time.perf_counter() - t0 - sum(t.values())
     _log(

@@ -22,6 +22,40 @@ beforeAll(() => {
   };
   writeFileSync(join(routeDir, RUN, "manifest.json"), JSON.stringify(manifest));
   writeFileSync(join(routeDir, RUN, "path.geojson"), JSON.stringify({ type: "FeatureCollection", features: [] }));
+  const place = (id: string, service: string, at: number, extra: Record<string, unknown> = {}) => ({
+    id,
+    service,
+    kind: "k",
+    name: id,
+    lon: 0,
+    lat: 0,
+    at_m: at,
+    offset_m: 10,
+    side: "left",
+    access_m: 300,
+    access_min: 1.2,
+    climb_m: 0,
+    access_at_m: at,
+    counts: true,
+    on_route: true,
+    months: "oooooooooooo",
+    opening_hours: null,
+    country: "FR",
+    sources: [`osm:${id}`],
+    confidence: "medium",
+    detail: {},
+    ...extra,
+  });
+  const places = {
+    season_year: 2027,
+    places: [
+      place("a", "water", 500),
+      place("b", "accommodation", 1500, { months: "cccooooooccc" }),
+      place("c", "accommodation", 2500, { access_m: 7000, counts: false }),
+      place("d", "food", 4000),
+    ],
+  };
+  writeFileSync(join(routeDir, RUN, "places.json"), JSON.stringify(places));
 });
 
 afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -55,6 +89,31 @@ describe("api v1", () => {
   it("rejects malformed names and run ids", async () => {
     expect((await app().request("/v1/routes/eurovelo/EV8")).status).toBe(400);
     expect((await app().request("/v1/routes/eurovelo/ev8?run=../../etc")).status).toBe(400);
+  });
+
+  it("filters places by km range, service, detour, counting and month", async () => {
+    type Res = { total: number; truncated: boolean; places: { id: string }[] };
+    const get = async (qs: string) => {
+      const res = await app().request(`/v1/routes/eurovelo/ev8/places?${qs}`);
+      expect(res.status).toBe(200);
+      return (await res.json()) as Res;
+    };
+    const ids = (r: Res) => r.places.map((p) => p.id);
+    expect(ids(await get(""))).toEqual(["a", "b", "c", "d"]);
+    expect(ids(await get("from_km=1&to_km=3"))).toEqual(["b", "c"]);
+    expect(ids(await get("service=accommodation,food"))).toEqual(["b", "c", "d"]);
+    expect(ids(await get("max_detour_m=5000"))).toEqual(["a", "b", "d"]);
+    expect(ids(await get("counting=1"))).toEqual(["a", "b", "d"]);
+    expect(ids(await get("month=1"))).toEqual(["a", "c", "d"]); // b is closed in January
+    const limited = await get("limit=2");
+    expect(limited.total).toBe(4);
+    expect(limited.truncated).toBe(true);
+  });
+
+  it("rejects invalid place queries", async () => {
+    expect((await app().request("/v1/routes/eurovelo/ev8/places?month=13")).status).toBe(400);
+    expect((await app().request("/v1/routes/eurovelo/ev8/places?from_km=-1")).status).toBe(400);
+    expect((await app().request("/v1/routes/eurovelo/ev8/places?service=DROP;")).status).toBe(400);
   });
 
   it("serves a specific run as immutable", async () => {

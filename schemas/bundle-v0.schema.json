@@ -3,7 +3,7 @@
     "BundleManifest": {
       "properties": {
         "schema_version": {
-          "default": "0.2",
+          "default": "0.3",
           "type": "string"
         },
         "run_id": {
@@ -764,6 +764,185 @@
       "type": "object",
       "title": "PipelineInfo"
     },
+    "Place": {
+      "description": "A service near the route (conflated from OSM and Overture), located on the route's measure axis.\n\n`months` holds one letter per month of the season year (D18): o = open, p = partly (the season starts or ends\nthat month), c = closed, ? = unknown.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "kind": {
+          "description": "Subtype, e.g. campsite, hotel, supermarket, cafe",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lon": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "at_m": {
+          "description": "Measure of the closest route point",
+          "type": "number"
+        },
+        "offset_m": {
+          "description": "Straight-line distance from the route",
+          "type": "number"
+        },
+        "side": {
+          "enum": [
+            "left",
+            "right",
+            "on"
+          ],
+          "type": "string"
+        },
+        "access_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Ridden one-way distance from the route; null if no route found"
+        },
+        "access_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Minutes at touring pace including climbing (D17)"
+        },
+        "climb_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Net climb from the access point to the place"
+        },
+        "access_at_m": {
+          "description": "Measure where the rider leaves the route for this place",
+          "type": "number"
+        },
+        "counts": {
+          "description": "Within the service type's counting limits",
+          "type": "boolean"
+        },
+        "on_route": {
+          "type": "boolean"
+        },
+        "months": {
+          "description": "12 letters, January first: o open, p partly, c closed, ? unknown",
+          "type": "string"
+        },
+        "opening_hours": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ISO 3166-1 alpha-2"
+        },
+        "sources": {
+          "description": "Source record ids, e.g. osm:n123, overture:<id>",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        },
+        "detail": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "service",
+        "kind",
+        "name",
+        "lon",
+        "lat",
+        "at_m",
+        "offset_m",
+        "side",
+        "access_m",
+        "access_min",
+        "climb_m",
+        "access_at_m",
+        "counts",
+        "on_route",
+        "months",
+        "opening_hours",
+        "country",
+        "sources",
+        "confidence",
+        "detail"
+      ],
+      "type": "object",
+      "title": "Place"
+    },
+    "PlacesFile": {
+      "properties": {
+        "season_year": {
+          "type": "integer"
+        },
+        "places": {
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "season_year",
+        "places"
+      ],
+      "type": "object",
+      "title": "PlacesFile"
+    },
     "ProfileFile": {
       "description": "Elevation sampled along the path every `step_m`.\n\n`ele` is the audit's best estimate (smoothed DEM, bridges and tunnels interpolated) when a DEM was used,\notherwise the source GPX elevation. `gpx_ele` always holds the source GPX elevation for comparison.",
       "properties": {
@@ -1004,6 +1183,45 @@
       "type": "object",
       "title": "SectionScores"
     },
+    "SectionServices": {
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Service id -> places that count on this daily section",
+          "type": "object"
+        },
+        "longest_gap_m": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Service id -> longest stretch inside the section without the service, per month (Jan-Dec)",
+          "type": "object"
+        },
+        "unknown_hours": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Service id -> share of counted places with unknown months",
+          "type": "object"
+        }
+      },
+      "required": [
+        "number",
+        "counts",
+        "longest_gap_m",
+        "unknown_hours"
+      ],
+      "type": "object",
+      "title": "SectionServices"
+    },
     "SectionsFile": {
       "properties": {
         "daily": {
@@ -1068,6 +1286,168 @@
       ],
       "type": "object",
       "title": "SectionsFile"
+    },
+    "ServiceGap": {
+      "description": "A stretch without a service, at least half as long as the stretch that triggers a finding.",
+      "properties": {
+        "service": {
+          "description": "Service id, or bail_out for stations that carry bikes within bail-out reach",
+          "type": "string"
+        },
+        "month": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "0-11: counting places not known closed that month; null: any month"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "threshold_m": {
+          "description": "Gap length that triggers a finding for this service",
+          "type": "number"
+        }
+      },
+      "required": [
+        "service",
+        "month",
+        "from_m",
+        "to_m",
+        "threshold_m"
+      ],
+      "type": "object",
+      "title": "ServiceGap"
+    },
+    "ServiceType": {
+      "description": "A kind of service along the route, with the access limits that decide whether a place counts (D17).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "count_m": {
+          "description": "Ridden one-way distance within which a place counts",
+          "type": "number"
+        },
+        "count_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Time cap (flat speed plus climbing) for counting; null = none"
+        },
+        "show_m": {
+          "description": "Places up to this ridden distance are kept for display",
+          "type": "number"
+        },
+        "costing": {
+          "enum": [
+            "bicycle",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "gap_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A stretch this long without the service gives a finding"
+        },
+        "gap_also": {
+          "description": "Other services that also fill this one's gaps (shops sell water)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "count_m",
+        "count_min",
+        "show_m",
+        "costing",
+        "gap_m",
+        "gap_also"
+      ],
+      "type": "object",
+      "title": "ServiceType"
+    },
+    "ServicesFile": {
+      "properties": {
+        "rules_profile": {
+          "type": "string"
+        },
+        "season_year": {
+          "type": "integer"
+        },
+        "types": {
+          "items": {
+            "$ref": "#/$defs/ServiceType"
+          },
+          "type": "array"
+        },
+        "route_longest_gap_m": {
+          "additionalProperties": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "description": "Service id -> longest gap per month",
+          "type": "object"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/SectionServices"
+          },
+          "type": "array"
+        },
+        "gaps": {
+          "items": {
+            "$ref": "#/$defs/ServiceGap"
+          },
+          "type": "array"
+        },
+        "season_known": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Service id -> share of counted places whose opening season is published (any month known)",
+          "type": "object"
+        }
+      },
+      "required": [
+        "rules_profile",
+        "season_year",
+        "types",
+        "route_longest_gap_m",
+        "sections",
+        "gaps",
+        "season_known"
+      ],
+      "type": "object",
+      "title": "ServicesFile"
     },
     "Severity": {
       "enum": [
@@ -1300,6 +1680,12 @@
     "scores": {
       "$ref": "#/$defs/ScoresFile"
     },
+    "places": {
+      "$ref": "#/$defs/PlacesFile"
+    },
+    "services": {
+      "$ref": "#/$defs/ServicesFile"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointer"
     }
@@ -1312,6 +1698,8 @@
     "events",
     "minor",
     "scores",
+    "places",
+    "services",
     "current"
   ],
   "type": "object",

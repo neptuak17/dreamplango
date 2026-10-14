@@ -124,13 +124,23 @@ def audit(
     valhalla: str = typer.Option("http://127.0.0.1:8002", help="Valhalla service URL (scripts/valhalla up)"),
     workers: int = typer.Option(6, help="Parallel map-matching requests"),
     rules: str = typer.Option("eurovelo-ecs-v0", help="Rules profile in engine/profiles/"),
+    services: str = typer.Option("services-v0", help="Services profile in engine/profiles/"),
+    overture_release: str = typer.Option(None, help="Overture release, e.g. 2026-09-23.1; default: latest"),
 ) -> None:
-    """Full infrastructure audit: map matching, layers, gaps, terrain, ECS-style rules -> new bundle."""
+    """Full audit: map matching, layers, gaps, terrain, services and access, ECS-style rules -> new bundle."""
     _check_network(network)
     from dpg_audit import audit as audit_mod  # heavy imports (osmium, rasterio) only when auditing
 
     result = audit_mod.run(
-        data_dir(), network, ref, snapshot=snapshot, valhalla_url=valhalla, workers=workers, rules_name=rules
+        data_dir(),
+        network,
+        ref,
+        snapshot=snapshot,
+        valhalla_url=valhalla,
+        workers=workers,
+        rules_name=rules,
+        services_name=services,
+        overture_release=overture_release,
     )
     typer.echo("timings: " + ", ".join(f"{k} {v:.0f}s" for k, v in result.timings.items()))
     typer.echo(f"bundle {result.run_id} -> {result.out}")

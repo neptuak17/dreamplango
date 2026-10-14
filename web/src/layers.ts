@@ -66,6 +66,34 @@ export class Slicer {
       .filter((r) => r.m && r.m.length === r.coords.length && r.m.length >= 2);
   }
 
+  /** Coordinates at path measure m (clamped to the nearest ride). */
+  pointAt(m: number): [number, number] | null {
+    let best: Ride | null = null;
+    for (const r of this.rides) {
+      if (m >= r.m[0]! && m <= r.m[r.m.length - 1]!) return locate(r, m);
+      if (!best || Math.abs(r.m[0]! - m) < Math.abs(best.m[0]! - m)) best = r;
+    }
+    return best ? locate(best, Math.min(Math.max(m, best.m[0]!), best.m[best.m.length - 1]!)) : null;
+  }
+
+  /** Path measure of the vertex nearest to a point, searching the rides of one daily section. */
+  nearestM(section: number, lon: number, lat: number): number | null {
+    const k = Math.cos((lat * Math.PI) / 180);
+    let best: number | null = null;
+    let bestD = Number.POSITIVE_INFINITY;
+    for (const r of this.rides) {
+      if (r.section !== section) continue;
+      r.coords.forEach(([x, y], i) => {
+        const d = ((x - lon) * k) ** 2 + (y - lat) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = r.m[i]!;
+        }
+      });
+    }
+    return best;
+  }
+
   /** One coordinate run per ride that overlaps [m0, m1]. */
   slice(m0: number, m1: number): { section: number; coords: [number, number][] }[] {
     const out = [];

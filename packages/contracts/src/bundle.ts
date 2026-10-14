@@ -18,6 +18,8 @@ export interface BundleContract {
   events: EventsFile;
   minor: MinorFile;
   scores: ScoresFile;
+  places: PlacesFile;
+  services: ServicesFile;
   current: CurrentPointer;
 }
 export interface BundleManifest {
@@ -382,6 +384,161 @@ export interface Climb {
    */
   fiets: number;
   direction: "forward" | "reverse";
+}
+export interface PlacesFile {
+  season_year: number;
+  places: Place[];
+}
+/**
+ * A service near the route (conflated from OSM and Overture), located on the route's measure axis.
+ *
+ * `months` holds one letter per month of the season year (D18): o = open, p = partly (the season starts or ends
+ * that month), c = closed, ? = unknown.
+ */
+export interface Place {
+  id: string;
+  service: string;
+  /**
+   * Subtype, e.g. campsite, hotel, supermarket, cafe
+   */
+  kind: string;
+  name: string | null;
+  lon: number;
+  lat: number;
+  /**
+   * Measure of the closest route point
+   */
+  at_m: number;
+  /**
+   * Straight-line distance from the route
+   */
+  offset_m: number;
+  side: "left" | "right" | "on";
+  /**
+   * Ridden one-way distance from the route; null if no route found
+   */
+  access_m: number | null;
+  /**
+   * Minutes at touring pace including climbing (D17)
+   */
+  access_min: number | null;
+  /**
+   * Net climb from the access point to the place
+   */
+  climb_m: number | null;
+  /**
+   * Measure where the rider leaves the route for this place
+   */
+  access_at_m: number;
+  /**
+   * Within the service type's counting limits
+   */
+  counts: boolean;
+  on_route: boolean;
+  /**
+   * 12 letters, January first: o open, p partly, c closed, ? unknown
+   */
+  months: string;
+  opening_hours: string | null;
+  /**
+   * ISO 3166-1 alpha-2
+   */
+  country: string | null;
+  /**
+   * Source record ids, e.g. osm:n123, overture:<id>
+   */
+  sources: string[];
+  confidence: "high" | "medium" | "low";
+  detail: {
+    [k: string]: unknown;
+  };
+}
+export interface ServicesFile {
+  rules_profile: string;
+  season_year: number;
+  types: ServiceType[];
+  /**
+   * Service id -> longest gap per month
+   */
+  route_longest_gap_m: {
+    [k: string]: number[];
+  };
+  sections: SectionServices[];
+  gaps: ServiceGap[];
+  /**
+   * Service id -> share of counted places whose opening season is published (any month known)
+   */
+  season_known: {
+    [k: string]: number;
+  };
+}
+/**
+ * A kind of service along the route, with the access limits that decide whether a place counts (D17).
+ */
+export interface ServiceType {
+  id: string;
+  title: string;
+  /**
+   * Ridden one-way distance within which a place counts
+   */
+  count_m: number;
+  /**
+   * Time cap (flat speed plus climbing) for counting; null = none
+   */
+  count_min: number | null;
+  /**
+   * Places up to this ridden distance are kept for display
+   */
+  show_m: number;
+  costing: "bicycle" | "auto";
+  /**
+   * A stretch this long without the service gives a finding
+   */
+  gap_m: number | null;
+  /**
+   * Other services that also fill this one's gaps (shops sell water)
+   */
+  gap_also: string[];
+}
+export interface SectionServices {
+  number: number;
+  /**
+   * Service id -> places that count on this daily section
+   */
+  counts: {
+    [k: string]: number;
+  };
+  /**
+   * Service id -> longest stretch inside the section without the service, per month (Jan-Dec)
+   */
+  longest_gap_m: {
+    [k: string]: number[];
+  };
+  /**
+   * Service id -> share of counted places with unknown months
+   */
+  unknown_hours: {
+    [k: string]: number;
+  };
+}
+/**
+ * A stretch without a service, at least half as long as the stretch that triggers a finding.
+ */
+export interface ServiceGap {
+  /**
+   * Service id, or bail_out for stations that carry bikes within bail-out reach
+   */
+  service: string;
+  /**
+   * 0-11: counting places not known closed that month; null: any month
+   */
+  month: number | null;
+  from_m: number;
+  to_m: number;
+  /**
+   * Gap length that triggers a finding for this service
+   */
+  threshold_m: number;
 }
 export interface CurrentPointer {
   run_id: string;

@@ -1,6 +1,7 @@
 /** HTTP API (v1). Runtime-neutral: the same app runs on Node now and on Cloudflare Workers later. */
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { PlacesCache, filterPlaces, parsePlaceQuery } from "./places";
 import { type BundleFile, type BundleStore, readManifest } from "./store";
 
 const NAME = /^[a-z0-9-]{1,32}$/;
@@ -15,6 +16,8 @@ const CONTENT_TYPES: Record<BundleFile, string> = {
   events: "application/json",
   minor: "application/json",
   scores: "application/json",
+  places: "application/json",
+  services: "application/json",
 };
 
 export function createApp(store: BundleStore) {
@@ -67,9 +70,26 @@ export function createApp(store: BundleStore) {
   };
 
   app.get("/v1/routes/:network/:ref", serve("manifest"));
-  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores"] as const) {
+  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores", "services"] as const) {
     app.get(`/v1/routes/:network/:ref/${file}`, serve(file));
   }
+
+  // The places file can be tens of megabytes: it is parsed once and served filtered, never whole.
+  const placesCache = new PlacesCache();
+  app.get("/v1/routes/:network/:ref/places", async (c) => {
+    const target = await resolveRun(c);
+    if (target instanceof Response) return target;
+    const query = parsePlaceQuery((name) => c.req.query(name));
+    if (typeof query === "string") return c.json({ error: query }, 400);
+    const { network, ref, runId } = target;
+    const file = await placesCache.get(`${network}/${ref}/${runId}`, () =>
+      store.readFile(network, ref, runId, "places"),
+    );
+    if (file === null) return c.json({ error: "places not found" }, 404);
+    return c.json(filterPlaces(file, query), 200, {
+      "cache-control": c.req.query("run") ? "public, max-age=31536000, immutable" : "no-cache",
+    });
+  });
 
   return app;
 }
