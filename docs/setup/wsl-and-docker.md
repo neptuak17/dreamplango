@@ -20,6 +20,16 @@ Allow about 30–45 minutes, including one restart.
 
    This turns on the Windows features WSL needs and downloads Ubuntu. WSL works on Windows 11 Home.
 
+   > **If the Ubuntu download fails with `Not found (404)` / `Wsl/InstallDistro/HTTP_E_STATUS_NOT_FOUND`:** this happened on 2026-10-14. WSL itself installs fine, but Microsoft's distribution list points the **ARM64** builds of Ubuntu 24.04 and 26.04 at URLs that don't exist; the images are under `cdimage.ubuntu.com/ubuntu/releases/…`. Install from the file instead (any folder, no admin needed):
+   >
+   > ```powershell
+   > curl.exe -L -o "$env:USERPROFILE\Downloads\ubuntu-24.04.5-wsl-arm64.wsl" https://cdimage.ubuntu.com/ubuntu/releases/noble/release/ubuntu-24.04.5-wsl-arm64.wsl
+   > (Get-FileHash "$env:USERPROFILE\Downloads\ubuntu-24.04.5-wsl-arm64.wsl" -Algorithm SHA256).Hash
+   > wsl --install --from-file "$env:USERPROFILE\Downloads\ubuntu-24.04.5-wsl-arm64.wsl" --name Ubuntu-24.04
+   > ```
+   >
+   > The hash must be `74478B5024D9047397BA79D17C27F73CAF85ADA4988F88CFFC2892D65E6A806B`, matching Ubuntu's published `SHA256SUMS` for this file (388 MB). Then run `wsl -d Ubuntu-24.04` to create your Linux user (step 4).
+
 3. **Restart Windows** when asked.
 
 4. **Create your Linux user.** After the restart, Ubuntu opens by itself (or start **Ubuntu 24.04** from the Start menu). Choose a Linux username and password. They are separate from your Windows login, and you'll need the password for `sudo`.

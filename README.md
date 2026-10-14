@@ -18,7 +18,7 @@ Route audits and Dream–Plan–Go trip support for long-distance cycle routes, 
 
 ## Prerequisites
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) **on your PATH**. If uv came from `pip install --user uv` on Windows, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\add-uv-to-path.ps1` (add `-DryRun` to preview).
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/) **on your PATH**. On Windows, install it from a normal PowerShell window with `python -m pip install --user uv`, then run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\add-uv-to-path.ps1` (add `-DryRun` to preview). Per-user installs made from inside the Claude desktop app land in that app's private AppData and aren't visible to other programs.
 - Node.js 24+ (npm 11+).
 - From milestone M1: WSL2 (Ubuntu 24.04) and Docker. See [docs/setup/wsl-and-docker.md](docs/setup/wsl-and-docker.md).
 

@@ -347,7 +347,7 @@ Alternative considered: all Python (FastAPI) for V1, then rewrite the API for Wo
 
 Docker services:
 
-- **Valhalla** for map matching and routing. No official arm64 image is confirmed, so the first milestone verifies one or builds from source in WSL.
+- **Valhalla** for map matching and routing, run in Docker on Ubuntu (WSL). The official images `ghcr.io/valhalla/valhalla` and `ghcr.io/valhalla/valhalla-scripted` publish `linux/arm64` builds (checked 2026-10-14), so no source build is needed.
 - **BRouter**, optional.
 
 ### 6.3 API (TypeScript, Node 24 LTS now, Workers later)
@@ -711,7 +711,7 @@ Riding it in autumn exercises exactly the parts of the audit that other apps ign
 | Closures have no unified source | Layered approach in 5.6; curated registry first |
 | DEM is a surface model (trees, bridges) | National terrain models where open; bridge/tunnel interpolation; smoothing; validate on known climbs |
 | Licence terms: Open-Meteo (non-commercial), MeteoAlarm redistribution, Mapillary derived data, ODbL share-alike | Licence register in `docs/`; provider interfaces allow swaps; legal review before launch |
-| Valhalla arm64 image availability; Valhalla on Containers | Verify in M0; build from source if needed; VM fallback for production |
+| Valhalla on Cloudflare Containers (production only) | Laptop: resolved, since official arm64 images exist. Production: evaluate Containers' disk limits; small VM as a fallback (10.2). |
 | Laptop capacity (RAM/disk) | Corridor clipping; start with 2–3 routes |
 
 **Questions for you:**

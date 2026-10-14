@@ -41,7 +41,9 @@ if (-not $python) { throw 'python was not found on PATH.' }
 $scripts = (& $python.Source -c "import sysconfig; print(sysconfig.get_path('scripts', 'nt_user'))").Trim()
 $uv = Join-Path $scripts 'uv.exe'
 if (-not (Test-Path $uv)) {
-    throw "uv.exe was not found in $scripts. Install it first with: python -m pip install --user uv"
+    # Note: installs made from inside a packaged (MSIX) app such as the Claude desktop app land in that app's
+    # private copy of AppData and are invisible here. Install from a normal PowerShell window.
+    throw "uv.exe was not found in $scripts. Install it first, from a normal PowerShell window, with: python -m pip install --user uv"
 }
 Write-Host "uv found: $uv"
 
