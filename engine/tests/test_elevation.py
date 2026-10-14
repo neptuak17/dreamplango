@@ -69,6 +69,13 @@ def test_implausible_grades_are_unknown():
     assert not el.climbs(el.profiles(straight_path(), cliff, []))
 
 
+def test_max_grade_ignores_untrusted_and_implausible():
+    profs = el.profiles(straight_path(), ramp_sampler, [])
+    assert el.max_grade_window(profs, 0, 10_000) == pytest.approx(5.0, abs=0.6)
+    el.mark_untrusted(profs, [(1500.0, 4500.0)])  # the whole ramp sits on placeholder geometry
+    assert (el.max_grade_window(profs, 0, 10_000) or 0) < 1.0
+
+
 def test_structures_are_interpolated_not_sampled():
     def bridge_dip(lon, lat):
         m = (np.asarray(lon) - 5.0) * 78_850

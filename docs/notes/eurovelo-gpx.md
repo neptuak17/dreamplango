@@ -47,23 +47,32 @@ EV8 has no "Certified" sections. The parser accepts the word anyway, and flags a
 
 ### Gaps between consecutive sections (≥ 1 km)
 
-The "likely" column is a guess to check in M1 against OSM ferry routes and rail. It has not been verified.
+"Initial guess" was written at M0 inspection. "M1 audit" is what the engine concluded from OSM ferry routes (terminals at both ends), rail stations near both ends, and the curated file `engine/profiles/routes/eurovelo-ev8.yaml`.
 
-| After section | Straight-line | Where | Likely |
-|---|---:|---|---|
-| 40 | 1.2 km | Sant Feliu de Guíxols | digitising gap |
-| 60 | 45.7 km | Ventimiglia → Limone | missing track or rail link over the Col de Tende |
-| 70 | 1.5 km | Cremona | digitising gap |
-| 75 | 4.7 km | Chioggia → Pellestrina | lagoon ferry |
-| 76 | 1.2 km | Santa Maria del Mare → Alberoni | lagoon ferry |
-| 77 | 5.5 km | Lido di Venezia → Jesolo side | lagoon ferry |
-| 82 | 32.4 km | Monfalcone → Muggia (Trieste) | missing track or ferry |
-| 101 | 14.2 km | Ploče → Trpanj | ferry |
-| 137 | 302 km | Athens → Dikili (Türkiye) | **ferry**, very likely (owner's assessment): the gap crosses the Aegean. There seems to be no direct sailing, so probably via an island such as Lesvos to Dikili or Ayvalık. Exact route and season to confirm in M1. |
-| 145 | 621 km | Selçuk → Nicosia (Cyprus) | **ferry**, very likely (owner's assessment): the gap crosses the sea. Türkiye–Cyprus ferries appear to sail from the south coast (e.g. Taşucu or Mersin to northern Cyprus), so this probably also involves a long overland transfer, plus a crossing of the line dividing Cyprus to reach Nicosia. To confirm in M1. |
-| 146, 148, 150 | 1.2, 4.1, 4.8 km | Cyprus loop | digitising gaps or missing links |
+| After section | Straight-line | Where | Initial guess | M1 audit (basis, confidence) |
+|---|---:|---|---|---|
+| 40 | 1.2 km | Sant Feliu de Guíxols | digitising gap | discontinuity (distance, medium) |
+| 60 | 45.7 km | Ventimiglia → Limone | missing track or rail link over the Col de Tende | **public-transport link** (rail stations at both ends, low) |
+| 70 | 1.5 km | Cremona | digitising gap | discontinuity (distance, medium) |
+| 75 | 4.7 km | Chioggia → Pellestrina | lagoon ferry | **ferry** (OSM ferry route, high) |
+| 76 | 1.2 km | Santa Maria del Mare → Alberoni | lagoon ferry | **ferry** (OSM ferry route, high) |
+| 77 | 5.5 km | Lido di Venezia → Jesolo side | lagoon ferry | **ferry** (OSM ferry route, high) |
+| 82 | 32.4 km | Monfalcone → Muggia (Trieste) | missing track or ferry | **missing** (no ferry or rail at both ends, medium) |
+| 101 | 14.2 km | Ploče → Trpanj | ferry | **ferry** (OSM ferry route, high) |
+| 137 | 302 km | Athens → Dikili (Türkiye) | ferry, very likely (owner's assessment): crosses the Aegean. There seems to be no direct sailing, so probably via an island such as Lesvos to Dikili or Ayvalık. | **ferry** (curated, medium). Exact route and season still to confirm. |
+| 145 | 621 km | Selçuk → Nicosia (Cyprus) | ferry, very likely (owner's assessment): crosses the sea. Türkiye–Cyprus ferries appear to sail from the south coast (e.g. Taşucu or Mersin to northern Cyprus), so probably a long overland transfer plus a crossing of the line dividing Cyprus. | **ferry** (curated, medium). Still to confirm. |
+| 146 | 1.2 km | Cyprus loop | digitising gap | discontinuity (distance, medium) |
+| 148 | 4.1 km | Cyprus loop (Limassol → Paphos) | digitising gap or missing link | **missing** (medium). An early matcher version wrongly called this a ferry because a coastal ferry line passed nearby; terminals are now required. |
+| 150 | 4.8 km | Cyprus loop (Polis → Kykkos) | digitising gap or missing link | **missing** (medium) |
 
-There are also 15 breaks shorter than 1 km, mostly under 300 m (info level).
+There are also 15 breaks shorter than 1 km, mostly under 300 m. All are discontinuities (info level).
+
+## M1 audit results (bundle 2026-10-14)
+
+- **Matching:** 98.8% of the 7,347 km is matched to OSM. 89 km is unmatched; 28 km of that is section 53's straight-line placeholder (Manosque–Meyrargues). Another 344 km is matched only approximately, between source points more than 1 km apart.
+- **OSM's EuroVelo 8 relations** cover 83% of the official track.
+- **Indicative ECS-style check (placeholder thresholds):** 71% of the length meets all essential criteria and 17% all important ones. Important criteria fail mostly on signage (44% of the length is published as not signed) and low traffic.
+- **Terrain:** about 63,500 m of climbing over the whole route. The steepest sustained grades are in the mountain sections: Troodos in Cyprus, Velebit in Croatia, Montenegro, and the Albanian coast around Llogara. Some coastal values may still be cliff artefacts, because the DEM is sampled along the published track rather than the matched road.
 
 ## Consequences for the engine
 

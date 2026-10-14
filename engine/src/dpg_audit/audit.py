@@ -80,6 +80,7 @@ def run(
     profs = elevation.profiles(build.path, lambda lon, lat: dem.sample(lon, lat, root), matched.structures)
     # The terrain under a straight-line placeholder says nothing about the real road.
     untrusted = [(f.from_m, f.to_m) for f in build.findings if f.rule_id == "source.straight_segment"]
+    elevation.mark_untrusted(profs, untrusted)
     grad = elevation.gradient_events(profs, untrusted)
     climbs = elevation.climbs(profs, untrusted=untrusted)
     t["terrain"] = time.perf_counter() - t0 - sum(t.values())

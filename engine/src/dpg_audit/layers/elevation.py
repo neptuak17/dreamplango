@@ -34,6 +34,17 @@ class PartProfile:
     ele: np.ndarray
     """Smoothed elevation (NaN where nothing usable)."""
     raw: np.ndarray
+    trusted: np.ndarray | None = None
+    """Per-sample flag; False where the track geometry itself is a placeholder (see mark_untrusted)."""
+
+
+def mark_untrusted(profs: list[PartProfile], ranges: list[tuple[float, float]]) -> None:
+    """Flag samples inside `ranges` (path measures) as untrusted for gradient statistics."""
+    for p in profs:
+        mask = np.ones(p.m.size, dtype=bool)
+        for r0, r1 in ranges:
+            mask &= ~((p.m >= r0) & (p.m <= r1))
+        p.trusted = mask
 
 
 def _fill_nans(m: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -186,7 +197,10 @@ def ascent_descent(profs: list[PartProfile], m0: float, m1: float, threshold: fl
 
 
 def max_grade_window(profs: list[PartProfile], m0: float, m1: float, window_m: float = 500.0) -> float | None:
-    """Steepest average gradient (%) over `window_m` within [m0, m1], in the direction of travel."""
+    """Steepest average gradient (%) over `window_m` within [m0, m1], in the direction of travel.
+
+    Windows touching untrusted samples, or with an implausible grade (terrain-model artefacts), are ignored.
+    """
     best = None
     n = int(window_m / STEP_M)
     for p in profs:
@@ -195,7 +209,13 @@ def max_grade_window(profs: list[PartProfile], m0: float, m1: float, window_m: f
         if e.size <= n or np.isnan(e).any():
             continue
         g = (e[n:] - e[:-n]) / (m[n:] - m[:-n]) * 100
-        top = float(g.max())
+        ok = np.abs(g) <= IMPLAUSIBLE_GRADE
+        if p.trusted is not None:
+            t = p.trusted[sel]
+            ok &= t[n:] & t[:-n]
+        if not ok.any():
+            continue
+        top = float(g[ok].max())
         best = top if best is None else max(best, top)
     return None if best is None else round(best, 1)
 
