@@ -8,12 +8,14 @@ import typer
 
 from dpg_audit.build import assemble
 from dpg_audit.bundle import write_bundle
-from dpg_audit.config import REPO_ROOT, data_dir
+from dpg_audit.config import REPO_ROOT, data_dir, work_dir
 from dpg_audit.contracts import bundle_schema
+from dpg_audit.corridor import corridor, write_geojson
 from dpg_audit.ingest.gpx import read_tracks
 from dpg_audit.lrs import MeasuredLine
 from dpg_audit.lrs.geodesy import distance
 from dpg_audit.networks import eurovelo
+from dpg_audit.sources import osm
 
 app = typer.Typer(help="DreamPlanGo Route Audit Engine", no_args_is_help=True)
 
@@ -55,6 +57,83 @@ def ingest(
             f"{share.length_m / 1000:7.0f} km  {share.share:6.1%}"
         )
     typer.echo(f"bundle {run_id} -> {out}")
+
+
+def _load_build(network: str, ref: str, snapshot: str | None):
+    _check_network(network)
+    root = data_dir()
+    snap = eurovelo.latest_snapshot(ref, root, snapshot)
+    return root, snap, assemble(eurovelo.route_for(ref), eurovelo.load_tracks(root / snap.file))
+
+
+@app.command("osm-prepare")
+def osm_prepare(
+    network: str,
+    ref: str,
+    buffer_km: float = typer.Option(15.0, help="Corridor half-width around the route"),
+    snapshot: str = typer.Option(None, help="Route snapshot date; default: latest"),
+    dry_run: bool = typer.Option(False, help="Only build the corridor and list the extracts needed"),
+) -> None:
+    """Build the route corridor, download the OSM country extracts it touches, and cut them to the corridor."""
+    root, _, build = _load_build(network, ref, snapshot)
+    wd = work_dir(root, network, ref)
+    area = corridor(build.lines, buffer_km * 1000)
+    corridor_path = wd / "corridor.geojson"
+    write_geojson(area, corridor_path, {"route": build.route.id, "buffer_km": buffer_km})
+    regions = osm.country_extracts(osm.geofabrik_index(root), corridor(build.lines, 3000))
+    typer.echo(f"corridor: {len(area.geoms)} polygon(s), {buffer_km:g} km either side -> {corridor_path}")
+    typer.echo("extracts: " + ", ".join(r["id"] for r in regions))
+    if dry_run:
+        return
+    pbfs, snaps = [], []
+    for region in regions:
+        pbf, snap = osm.ensure_extract(region, root)
+        pbfs.append(pbf)
+        snaps.append(snap)
+    out = osm.extract_corridor(pbfs, corridor_path, wd / "osm" / "corridor.osm.pbf")
+    (wd / "osm" / "sources.json").write_text(
+        json.dumps([s.model_dump(mode="json") for s in snaps], indent=2), encoding="utf-8"
+    )
+    typer.echo(f"corridor extract: {out} ({out.stat().st_size / 1e6:,.0f} MB)")
+
+
+@app.command("dem-prepare")
+def dem_prepare(
+    network: str,
+    ref: str,
+    snapshot: str = typer.Option(None, help="Route snapshot date; default: latest"),
+) -> None:
+    """Download the Copernicus DEM tiles the route crosses (the audit also does this on demand)."""
+    from dpg_audit.sources import dem
+
+    root, _, build = _load_build(network, ref, snapshot)
+    lines = [p.line.resample(250.0) for p in build.path.parts]
+    keys = dem.needed_tiles(np.concatenate([ln.lon for ln in lines]), np.concatenate([ln.lat for ln in lines]))
+    typer.echo(f"{len(keys)} DEM tiles needed; downloading missing ones …")
+    tiles = dem.ensure_tiles(keys, root)
+    present = [p for p in tiles.values() if p is not None]
+    size = sum(p.stat().st_size for p in present) / 1e9
+    typer.echo(f"{len(present)} tiles on disk ({size:.1f} GB), {len(tiles) - len(present)} absent (open sea)")
+
+
+@app.command()
+def audit(
+    network: str,
+    ref: str,
+    snapshot: str = typer.Option(None, help="Route snapshot date; default: latest"),
+    valhalla: str = typer.Option("http://127.0.0.1:8002", help="Valhalla service URL (scripts/valhalla up)"),
+    workers: int = typer.Option(6, help="Parallel map-matching requests"),
+    rules: str = typer.Option("eurovelo-ecs-v0", help="Rules profile in engine/profiles/"),
+) -> None:
+    """Full infrastructure audit: map matching, layers, gaps, terrain, ECS-style rules -> new bundle."""
+    _check_network(network)
+    from dpg_audit import audit as audit_mod  # heavy imports (osmium, rasterio) only when auditing
+
+    result = audit_mod.run(
+        data_dir(), network, ref, snapshot=snapshot, valhalla_url=valhalla, workers=workers, rules_name=rules
+    )
+    typer.echo("timings: " + ", ".join(f"{k} {v:.0f}s" for k, v in result.timings.items()))
+    typer.echo(f"bundle {result.run_id} -> {result.out}")
 
 
 @app.command()

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from dpg_audit.build import assemble
-from dpg_audit.bundle import FILES, write_bundle
+from dpg_audit.bundle import write_bundle
 from dpg_audit.models import BundleManifest, ComponentKind, DevelopmentLevel, Signage, SourceSnapshot
 from dpg_audit.networks import eurovelo
 
@@ -131,12 +131,16 @@ def test_write_bundle(sample_gpx, tmp_path):
         attribution=eurovelo.ATTRIBUTION.format(date="2026-10-14"),
     )
     run_id, out = write_bundle(build, [snap], tmp_path)
-    for name in FILES.values():
-        assert (out / name).exists()
     manifest = BundleManifest.model_validate_json((out / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest.files) == {"manifest", "path", "sections", "findings", "profile"}  # geometry-only bundle
+    for name in manifest.files.values():
+        assert (out / name).exists()
     assert manifest.run_id == run_id
     assert "2026-10-14" in manifest.attribution[0]
     current = json.loads((tmp_path / "bundles" / "eurovelo" / "ev8" / "current.json").read_text())
     assert current["run_id"] == run_id
     geo = json.loads((out / "path.geojson").read_text())
     assert [f["properties"]["kind"] for f in geo["features"]] == ["ride", "ride", "gap", "ride"]
+    ride = geo["features"][1]
+    assert len(ride["properties"]["m"]) == len(ride["geometry"]["coordinates"])  # a measure per coordinate
+    assert ride["properties"]["m"][0] == pytest.approx(ride["properties"]["from_m"], abs=0.2)

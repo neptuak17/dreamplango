@@ -11,6 +11,11 @@ def data_dir() -> Path:
     return Path(os.environ.get("DPG_DATA_DIR", REPO_ROOT / "data")).resolve()
 
 
+def work_dir(root: Path, network: str, ref: str) -> Path:
+    """Per-route working area for derived, re-creatable data (corridor, OSM cut, matching cache, ...)."""
+    return root / "work" / network / ref.lower()
+
+
 def user_agent() -> str:
     """HTTP User-Agent. Set DPG_CONTACT (e.g. an email) for providers that require contact details."""
     from dpg_audit import __version__

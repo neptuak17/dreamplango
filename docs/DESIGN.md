@@ -39,6 +39,11 @@
 | D8 | 2026-10-14 | **The early prototype runs locally on the laptop only.** The API binds to 127.0.0.1; Cloudflare comes later (section 10). |
 | D9 | 2026-10-14 | **M0 runs natively on Windows on ARM.** It uses uv + Python 3.14 and Node 24, because nothing in M0 needs GDAL or Docker. **WSL2 + Docker Desktop are required from M1** (Valhalla, osmium, GDAL). Root `package.json` scripts replace `just`, and npm workspaces replace pnpm, to avoid extra tools. |
 | D10 | 2026-10-14 | **Audit Bundle v0 (M0) is plain JSON/GeoJSON:** manifest, path, sections, findings, profile. `audit.sqlite` and PMTiles join the bundle in M1, when layers and places arrive. |
+| D11 | 2026-10-14 | **Bundles stay file-based JSON in M1** (supersedes the M1 timing in D10). The bundle adds `events.json` (layers), `minor.json` (1 km criteria) and `scores.json`, and path coordinates carry their measures so clients slice exactly. SQLite and PMTiles wait until iOS offline packs or D1 need them, or until the volume of places (M2) does. |
+| D12 | 2026-10-14 | **The official GPX stays the measure axis.** Matched OSM edges are laid onto it in proportion to matched length. Matched (ridden) length is reported per section, and a finding is raised when it differs from the published length by more than 10%. |
+| D13 | 2026-10-14 | **Traffic stress uses an LTS heuristic (v0), and the ECS-style rules (v0) use placeholder thresholds.** Both are labelled indicative everywhere and live in readable code and YAML (`engine/profiles/`) for tuning. |
+| D14 | 2026-10-14 | **The engine runs in Ubuntu (WSL).** It is invoked through `scripts/dpg`, with its virtualenv in `~/.venvs/dpg-engine` and its data in `~/dpg-data`. Valhalla runs in Docker there too (`scripts/valhalla`). The Windows API reads bundles through `\\wsl.localhost\…`, configured in `.env`. |
+| D15 | 2026-10-14 | **OSM extracts are chosen automatically:** Geofabrik country extracts (regions with an ISO code) within 3 km of the route, cut to a 15 km corridor. For EV8 that is 12 countries (10.6 GB downloaded, a 1 GB corridor). |
 
 ---
 

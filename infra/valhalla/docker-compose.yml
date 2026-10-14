@@ -1,0 +1,21 @@
+# Local Valhalla routing / map-matching service for one route corridor. Managed by scripts/valhalla.
+# The first start builds routing tiles from the corridor PBF in ${VALHALLA_DIR}; later starts reuse them.
+services:
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:${VALHALLA_TAG:-latest}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"  # keep generated files owned by the Linux user, not root
+    ports:
+      - "127.0.0.1:${VALHALLA_PORT:-8002}:8002"
+    volumes:
+      - ${VALHALLA_DIR:?set VALHALLA_DIR}:/custom_files
+    environment:
+      use_tiles_ignore_pbf: "True"   # scripts/valhalla deletes old tiles when the corridor PBF changes
+      build_tar: "True"
+      serve_tiles: "True"
+      build_admins: "True"           # country boundaries: country-specific bicycle access rules
+      build_time_zones: "False"
+      build_elevation: "False"       # elevation comes from our own DEM pipeline
+      build_transit: "False"
+      use_default_speeds_config: "False"
+      server_threads: "${VALHALLA_THREADS:-8}"
+    restart: unless-stopped

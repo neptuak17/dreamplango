@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Run the DreamPlanGo audit engine inside Ubuntu (WSL). From Windows: `wsl -d Ubuntu-24.04 -- bash scripts/dpg ...`
+#
+#   scripts/dpg <command> [args]   run the `dpg` CLI (fetch, ingest, audit, inspect, schemas, ...)
+#   scripts/dpg --test [args]      run the engine tests (pytest)
+#   scripts/dpg --lint             run ruff
+#   scripts/dpg --sync             install/update the engine's Linux virtualenv
+#
+# Data lives on the Linux filesystem (fast I/O for OSM, DEM and Valhalla tiles); the virtualenv lives outside the
+# repo so it never clashes with a Windows one. Both can be overridden with the environment variables below.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export DPG_DATA_DIR="${DPG_DATA_DIR:-$HOME/dpg-data}"
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$HOME/.venvs/dpg-engine}"
+export PATH="$HOME/.local/bin:$PATH"
+mkdir -p "$DPG_DATA_DIR"
+
+case "${1:-}" in
+  --test) shift; cd "$REPO/engine"; exec uv run pytest "$@" ;;
+  --lint) shift; cd "$REPO/engine"; exec uv run ruff check src tests "$@" ;;
+  --sync) shift; exec uv sync --project "$REPO/engine" "$@" ;;
+  *) exec uv run --project "$REPO/engine" dpg "$@" ;;
+esac

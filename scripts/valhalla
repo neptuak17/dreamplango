@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Manage the local Valhalla service (Docker, inside Ubuntu/WSL) for one route corridor.
+#
+#   scripts/valhalla up [network] [ref]    copy the corridor PBF in (rebuilding tiles if it changed) and start
+#   scripts/valhalla down [network] [ref]  stop the service
+#   scripts/valhalla status                print Valhalla's /status (version, tileset age)
+#   scripts/valhalla logs [network] [ref]  follow the container logs (tile builds take a while on first start)
+#
+# Defaults: network=eurovelo ref=ev8. Tiles live in $DPG_DATA_DIR/valhalla/<network>-<ref>/.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DATA="${DPG_DATA_DIR:-$HOME/dpg-data}"
+CMD="${1:-status}"
+NETWORK="${2:-eurovelo}"
+REF="${3:-ev8}"
+export VALHALLA_DIR="$DATA/valhalla/$NETWORK-$REF"
+export HOST_UID="$(id -u)" HOST_GID="$(id -g)"
+PBF="$DATA/work/$NETWORK/$REF/osm/corridor.osm.pbf"
+COMPOSE=(docker compose -f "$REPO/infra/valhalla/docker-compose.yml" -p "dpg-valhalla-$NETWORK-$REF")
+
+case "$CMD" in
+  up)
+    [ -f "$PBF" ] || { echo "no corridor extract at $PBF; run: scripts/dpg osm-prepare $NETWORK $REF" >&2; exit 1; }
+    mkdir -p "$VALHALLA_DIR"
+    if [ ! -f "$VALHALLA_DIR/corridor.osm.pbf" ] || ! cmp -s "$PBF" "$VALHALLA_DIR/corridor.osm.pbf"; then
+      echo "corridor PBF changed: clearing old tiles so they are rebuilt"
+      "${COMPOSE[@]}" down >/dev/null 2>&1 || true
+      find "$VALHALLA_DIR" -mindepth 1 -delete
+      cp "$PBF" "$VALHALLA_DIR/corridor.osm.pbf"
+    fi
+    "${COMPOSE[@]}" up -d
+    echo "started; first start builds tiles (watch with: scripts/valhalla logs $NETWORK $REF)"
+    ;;
+  down) "${COMPOSE[@]}" down ;;
+  logs) "${COMPOSE[@]}" logs -f --tail 50 ;;
+  status) curl -sf "http://127.0.0.1:${VALHALLA_PORT:-8002}/status" && echo || { echo "valhalla is not answering" >&2; exit 1; } ;;
+  *) echo "usage: scripts/valhalla up|down|status|logs [network] [ref]" >&2; exit 2 ;;
+esac

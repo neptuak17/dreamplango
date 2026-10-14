@@ -12,6 +12,9 @@ export const BUNDLE_FILES = {
   sections: "sections.json",
   findings: "findings.json",
   profile: "profile.json",
+  events: "events.json",
+  minor: "minor.json",
+  scores: "scores.json",
 } as const;
 
 export type BundleFile = keyof typeof BUNDLE_FILES;

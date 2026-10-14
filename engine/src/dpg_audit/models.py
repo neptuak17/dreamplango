@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-BUNDLE_SCHEMA_VERSION = "0.1"
+BUNDLE_SCHEMA_VERSION = "0.2"
 
 LonLat = tuple[float, float]
 
@@ -73,6 +73,16 @@ class ComponentKind(StrEnum):
     GAP = "gap"
 
 
+class GapType(StrEnum):
+    FERRY = "ferry"
+    PUBLIC_TRANSPORT = "public_transport"
+    DISCONTINUITY = "discontinuity"
+    """A small break in the published track, usually digitising noise."""
+    MISSING = "missing"
+    """No track and no known way across: the route is incomplete here."""
+    UNCLASSIFIED = "unclassified"
+
+
 class Component(Model):
     """A continuous piece of a path. Gaps join two ride components and have zero measured length."""
 
@@ -88,6 +98,9 @@ class Component(Model):
     daily_section: int | None = Field(default=None, description="Source daily section number (rides)")
     start: LonLat
     end: LonLat
+    gap_type: GapType | None = Field(default=None, description="For gaps: how the break is crossed")
+    gap_basis: str | None = Field(default=None, description="For gaps: what the classification rests on")
+    gap_confidence: Literal["high", "medium", "low"] | None = None
 
 
 class DailySection(Model):
@@ -184,12 +197,121 @@ class FindingsFile(Model):
 
 
 class ProfileFile(Model):
-    """Elevation sampled along the path. Values come from the source GPX and are unverified."""
+    """Elevation sampled along the path every `step_m`.
+
+    `ele` is the audit's best estimate (smoothed DEM, bridges and tunnels interpolated) when a DEM was used,
+    otherwise the source GPX elevation. `gpx_ele` always holds the source GPX elevation for comparison.
+    """
 
     step_m: float
     source: str
     m: list[float]
     ele: list[float | None]
+    gpx_ele: list[float | None] = Field(default_factory=list)
+
+
+Confidence = Literal["high", "medium", "low"]
+
+
+class LayerValue(Model):
+    id: str
+    label: str
+
+
+class LayerInfo(Model):
+    """A family of events along the route (e.g. surface), with its allowed categorical values."""
+
+    id: str
+    title: str
+    description: str
+    source: str
+    values: list[LayerValue]
+
+
+class Event(Model):
+    """One layer value over a stretch of the route (measures in metres on the path axis)."""
+
+    layer: str
+    from_m: float
+    to_m: float
+    value: str
+    confidence: Confidence
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class EventsFile(Model):
+    layers: list[LayerInfo]
+    events: list[Event]
+
+
+CriterionResult = Literal["pass", "fail", "unknown"]
+
+
+class Criterion(Model):
+    id: str
+    title: str
+    tier: Literal["essential", "important"]
+    description: str
+
+
+class MinorSection(Model):
+    """One ECS minor section (1 km): dominant layer values and indicative criterion results."""
+
+    index: int
+    from_m: float
+    to_m: float
+    values: dict[str, str] = Field(description="Layer id -> value covering most of this kilometre")
+    criteria: dict[str, CriterionResult]
+
+
+class MinorFile(Model):
+    size_m: float
+    criteria: list[Criterion]
+    sections: list[MinorSection]
+
+
+class CriterionShare(Model):
+    passed: float
+    failed: float
+    unknown: float
+
+
+class StretchStats(Model):
+    """Summary statistics over a stretch of route: the whole route, or one daily section."""
+
+    from_m: float
+    to_m: float
+    ascent_m: float | None
+    descent_m: float | None
+    max_grade_500m: float | None = Field(description="Steepest 500 m average gradient (%) in travel direction")
+    shares: dict[str, dict[str, float]] = Field(description="Layer id -> value -> share of length (0-1)")
+    criteria: dict[str, CriterionShare]
+    essential_pass: float = Field(description="Share of length meeting all essential criteria")
+    important_pass: float = Field(description="Share of length meeting all important criteria")
+
+
+class SectionScores(StretchStats):
+    number: int
+
+
+class Climb(Model):
+    from_m: float
+    to_m: float
+    length_m: float
+    gain_m: float
+    avg_grade: float
+    max_grade_500m: float
+    top_m: float = Field(description="Elevation at the top")
+    fiets: float = Field(description="FIETS climb difficulty index")
+    direction: Literal["forward", "reverse"]
+
+
+class ScoresFile(Model):
+    rules_profile: str
+    criteria: list[Criterion]
+    route: StretchStats
+    sections: list[SectionScores]
+    climbs: list[Climb]
 
 
 class CurrentPointer(Model):
@@ -204,4 +326,7 @@ class BundleContract(Model):
     sections: SectionsFile
     findings: FindingsFile
     profile: ProfileFile
+    events: EventsFile
+    minor: MinorFile
+    scores: ScoresFile
     current: CurrentPointer

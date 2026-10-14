@@ -29,8 +29,13 @@ const severityColor = [
   "#000000",
 ] as unknown as ExpressionSpecification;
 
+const EMPTY = { type: "FeatureCollection" as const, features: [] };
+const STATUS_LAYERS = ["route-signed", "route-unsigned"];
+
 interface Props {
   path: PathCollection;
+  /** Route coloured by an audit layer; null shows the EuroVelo status colouring. */
+  overlay: { type: "FeatureCollection"; features: unknown[] } | null;
   findings: Finding[];
   attribution: string[];
   selectedSection: number | null;
@@ -132,12 +137,27 @@ export function RouteMap(props: Props) {
         layout: { "line-join": "round" },
         paint: { "line-color": developmentColor, "line-width": 3.5, "line-dasharray": [2, 1.2] },
       });
+      const overlay = latest.current.overlay;
+      m.addSource("overlay", { type: "geojson", data: (overlay ?? EMPTY) as GeoJSONSourceSpecification["data"] });
+      m.addLayer({
+        id: "overlay-line",
+        type: "line",
+        source: "overlay",
+        layout: { "line-cap": "butt", "line-join": "round", visibility: overlay ? "visible" : "none" },
+        paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 6] },
+      });
+      if (overlay) for (const id of STATUS_LAYERS) m.setLayoutProperty(id, "visibility", "none");
       m.addLayer({
         id: "gaps",
         type: "line",
         source: "route",
         filter: ["==", ["get", "kind"], "gap"],
-        paint: { "line-color": "#343a40", "line-width": 1.5, "line-dasharray": [1, 2.5] },
+        paint: {
+          "line-color": ["match", ["get", "gap_type"], "ferry", "#3f51b5", "public_transport", "#7b3294",
+            "missing", "#d7301f", "#495057"],
+          "line-width": 1.8,
+          "line-dasharray": [1, 2.5],
+        },
       });
       m.addLayer({
         id: "findings",
@@ -151,12 +171,13 @@ export function RouteMap(props: Props) {
         },
       });
 
-      for (const layer of ["route-signed", "route-unsigned", "findings"]) {
+      const clickable = ["findings", "overlay-line", "route-signed", "route-unsigned"];
+      for (const layer of clickable) {
         m.on("mouseenter", layer, () => (m.getCanvas().style.cursor = "pointer"));
         m.on("mouseleave", layer, () => (m.getCanvas().style.cursor = ""));
       }
       m.on("click", (e) => {
-        const hits = m.queryRenderedFeatures(e.point, { layers: ["findings", "route-signed", "route-unsigned"] });
+        const hits = m.queryRenderedFeatures(e.point, { layers: clickable.filter((id) => m.getLayer(id)) });
         const hit = hits[0];
         if (!hit) return latest.current.onSelectSection(null);
         if (hit.layer.id === "findings") latest.current.onSelectFinding(String(hit.properties.id));
@@ -181,6 +202,17 @@ export function RouteMap(props: Props) {
     if (!m || !ready.current) return;
     (m.getSource("findings") as GeoJSONSource | undefined)?.setData(findingsGeoJSON(props.findings));
   }, [props.findings]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const overlay = props.overlay;
+    (m.getSource("overlay") as GeoJSONSource | undefined)?.setData(
+      (overlay ?? EMPTY) as Parameters<GeoJSONSource["setData"]>[0],
+    );
+    m.setLayoutProperty("overlay-line", "visibility", overlay ? "visible" : "none");
+    for (const id of STATUS_LAYERS) m.setLayoutProperty(id, "visibility", overlay ? "none" : "visible");
+  }, [props.overlay]);
 
   useEffect(() => {
     const m = map.current;

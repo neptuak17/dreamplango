@@ -4,6 +4,7 @@ export type DevelopmentLevel =
   "certified" | "developed" | "partially_developed" | "undeveloped_unknown" | "unrecognised";
 export type Signage = "signed" | "not_signed" | "unknown";
 export type ComponentKind = "ride" | "gap";
+export type GapType = "ferry" | "public_transport" | "discontinuity" | "missing" | "unclassified";
 export type Severity = "info" | "caution" | "warning" | "blocker";
 
 /**
@@ -14,6 +15,9 @@ export interface BundleContract {
   sections: SectionsFile;
   findings: FindingsFile;
   profile: ProfileFile;
+  events: EventsFile;
+  minor: MinorFile;
+  scores: ScoresFile;
   current: CurrentPointer;
 }
 export interface BundleManifest {
@@ -185,6 +189,15 @@ export interface Component {
    * @maxItems 2
    */
   end: [number, number];
+  /**
+   * For gaps: how the break is crossed
+   */
+  gap_type: GapType | null;
+  /**
+   * For gaps: what the classification rests on
+   */
+  gap_basis: string | null;
+  gap_confidence: ("high" | "medium" | "low") | null;
 }
 export interface FindingsFile {
   findings: Finding[];
@@ -208,13 +221,167 @@ export interface Finding {
   confidence: "high" | "medium" | "low";
 }
 /**
- * Elevation sampled along the path. Values come from the source GPX and are unverified.
+ * Elevation sampled along the path every `step_m`.
+ *
+ * `ele` is the audit's best estimate (smoothed DEM, bridges and tunnels interpolated) when a DEM was used,
+ * otherwise the source GPX elevation. `gpx_ele` always holds the source GPX elevation for comparison.
  */
 export interface ProfileFile {
   step_m: number;
   source: string;
   m: number[];
   ele: (number | null)[];
+  gpx_ele: (number | null)[];
+}
+export interface EventsFile {
+  layers: LayerInfo[];
+  events: Event[];
+}
+/**
+ * A family of events along the route (e.g. surface), with its allowed categorical values.
+ */
+export interface LayerInfo {
+  id: string;
+  title: string;
+  description: string;
+  source: string;
+  values: LayerValue[];
+}
+export interface LayerValue {
+  id: string;
+  label: string;
+}
+/**
+ * One layer value over a stretch of the route (measures in metres on the path axis).
+ */
+export interface Event {
+  layer: string;
+  from_m: number;
+  to_m: number;
+  value: string;
+  confidence: "high" | "medium" | "low";
+  detail: {
+    [k: string]: unknown;
+  };
+}
+export interface MinorFile {
+  size_m: number;
+  criteria: Criterion[];
+  sections: MinorSection[];
+}
+export interface Criterion {
+  id: string;
+  title: string;
+  tier: "essential" | "important";
+  description: string;
+}
+/**
+ * One ECS minor section (1 km): dominant layer values and indicative criterion results.
+ */
+export interface MinorSection {
+  index: number;
+  from_m: number;
+  to_m: number;
+  /**
+   * Layer id -> value covering most of this kilometre
+   */
+  values: {
+    [k: string]: string;
+  };
+  criteria: {
+    [k: string]: "pass" | "fail" | "unknown";
+  };
+}
+export interface ScoresFile {
+  rules_profile: string;
+  criteria: Criterion[];
+  route: StretchStats;
+  sections: SectionScores[];
+  climbs: Climb[];
+}
+/**
+ * Summary statistics over a stretch of route: the whole route, or one daily section.
+ */
+export interface StretchStats {
+  from_m: number;
+  to_m: number;
+  ascent_m: number | null;
+  descent_m: number | null;
+  /**
+   * Steepest 500 m average gradient (%) in travel direction
+   */
+  max_grade_500m: number | null;
+  /**
+   * Layer id -> value -> share of length (0-1)
+   */
+  shares: {
+    [k: string]: {
+      [k: string]: number;
+    };
+  };
+  criteria: {
+    [k: string]: CriterionShare;
+  };
+  /**
+   * Share of length meeting all essential criteria
+   */
+  essential_pass: number;
+  /**
+   * Share of length meeting all important criteria
+   */
+  important_pass: number;
+}
+export interface CriterionShare {
+  passed: number;
+  failed: number;
+  unknown: number;
+}
+export interface SectionScores {
+  from_m: number;
+  to_m: number;
+  ascent_m: number | null;
+  descent_m: number | null;
+  /**
+   * Steepest 500 m average gradient (%) in travel direction
+   */
+  max_grade_500m: number | null;
+  /**
+   * Layer id -> value -> share of length (0-1)
+   */
+  shares: {
+    [k: string]: {
+      [k: string]: number;
+    };
+  };
+  criteria: {
+    [k: string]: CriterionShare;
+  };
+  /**
+   * Share of length meeting all essential criteria
+   */
+  essential_pass: number;
+  /**
+   * Share of length meeting all important criteria
+   */
+  important_pass: number;
+  number: number;
+}
+export interface Climb {
+  from_m: number;
+  to_m: number;
+  length_m: number;
+  gain_m: number;
+  avg_grade: number;
+  max_grade_500m: number;
+  /**
+   * Elevation at the top
+   */
+  top_m: number;
+  /**
+   * FIETS climb difficulty index
+   */
+  fiets: number;
+  direction: "forward" | "reverse";
 }
 export interface CurrentPointer {
   run_id: string;

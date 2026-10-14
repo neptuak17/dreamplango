@@ -3,7 +3,7 @@
     "BundleManifest": {
       "properties": {
         "schema_version": {
-          "default": "0.1",
+          "default": "0.2",
           "type": "string"
         },
         "run_id": {
@@ -63,6 +63,56 @@
       ],
       "type": "object",
       "title": "BundleManifest"
+    },
+    "Climb": {
+      "properties": {
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "gain_m": {
+          "type": "number"
+        },
+        "avg_grade": {
+          "type": "number"
+        },
+        "max_grade_500m": {
+          "type": "number"
+        },
+        "top_m": {
+          "description": "Elevation at the top",
+          "type": "number"
+        },
+        "fiets": {
+          "description": "FIETS climb difficulty index",
+          "type": "number"
+        },
+        "direction": {
+          "enum": [
+            "forward",
+            "reverse"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_m",
+        "to_m",
+        "length_m",
+        "gain_m",
+        "avg_grade",
+        "max_grade_500m",
+        "top_m",
+        "fiets",
+        "direction"
+      ],
+      "type": "object",
+      "title": "Climb"
     },
     "Component": {
       "description": "A continuous piece of a path. Gaps join two ride components and have zero measured length.",
@@ -134,6 +184,46 @@
               "type": "number"
             }
           ]
+        },
+        "gap_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GapType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For gaps: how the break is crossed"
+        },
+        "gap_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For gaps: what the classification rests on"
+        },
+        "gap_confidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -146,7 +236,10 @@
         "straight_distance_m",
         "daily_section",
         "start",
-        "end"
+        "end",
+        "gap_type",
+        "gap_basis",
+        "gap_confidence"
       ],
       "type": "object",
       "title": "Component"
@@ -158,6 +251,54 @@
       ],
       "type": "string",
       "title": "ComponentKind"
+    },
+    "Criterion": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tier": {
+          "enum": [
+            "essential",
+            "important"
+          ],
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "tier",
+        "description"
+      ],
+      "type": "object",
+      "title": "Criterion"
+    },
+    "CriterionShare": {
+      "properties": {
+        "passed": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "unknown": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "passed",
+        "failed",
+        "unknown"
+      ],
+      "type": "object",
+      "title": "CriterionShare"
     },
     "CurrentPointer": {
       "properties": {
@@ -303,6 +444,67 @@
       "type": "object",
       "title": "EuroVeloStatus"
     },
+    "Event": {
+      "description": "One layer value over a stretch of the route (measures in metres on the path axis).",
+      "properties": {
+        "layer": {
+          "type": "string"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "value": {
+          "type": "string"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "type": "string"
+        },
+        "detail": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "layer",
+        "from_m",
+        "to_m",
+        "value",
+        "confidence",
+        "detail"
+      ],
+      "type": "object",
+      "title": "Event"
+    },
+    "EventsFile": {
+      "properties": {
+        "layers": {
+          "items": {
+            "$ref": "#/$defs/LayerInfo"
+          },
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "layers",
+        "events"
+      ],
+      "type": "object",
+      "title": "EventsFile"
+    },
     "Finding": {
       "properties": {
         "id": {
@@ -399,6 +601,65 @@
       "type": "object",
       "title": "FindingsFile"
     },
+    "GapType": {
+      "enum": [
+        "ferry",
+        "public_transport",
+        "discontinuity",
+        "missing",
+        "unclassified"
+      ],
+      "type": "string",
+      "title": "GapType"
+    },
+    "LayerInfo": {
+      "description": "A family of events along the route (e.g. surface), with its allowed categorical values.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "$ref": "#/$defs/LayerValue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "source",
+        "values"
+      ],
+      "type": "object",
+      "title": "LayerInfo"
+    },
+    "LayerValue": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "type": "object",
+      "title": "LayerValue"
+    },
     "Licence": {
       "properties": {
         "id": {
@@ -420,6 +681,73 @@
       "type": "object",
       "title": "Licence"
     },
+    "MinorFile": {
+      "properties": {
+        "size_m": {
+          "type": "number"
+        },
+        "criteria": {
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/MinorSection"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "size_m",
+        "criteria",
+        "sections"
+      ],
+      "type": "object",
+      "title": "MinorFile"
+    },
+    "MinorSection": {
+      "description": "One ECS minor section (1 km): dominant layer values and indicative criterion results.",
+      "properties": {
+        "index": {
+          "type": "integer"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Layer id -> value covering most of this kilometre",
+          "type": "object"
+        },
+        "criteria": {
+          "additionalProperties": {
+            "enum": [
+              "pass",
+              "fail",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "index",
+        "from_m",
+        "to_m",
+        "values",
+        "criteria"
+      ],
+      "type": "object",
+      "title": "MinorSection"
+    },
     "PipelineInfo": {
       "properties": {
         "name": {
@@ -437,7 +765,7 @@
       "title": "PipelineInfo"
     },
     "ProfileFile": {
-      "description": "Elevation sampled along the path. Values come from the source GPX and are unverified.",
+      "description": "Elevation sampled along the path every `step_m`.\n\n`ele` is the audit's best estimate (smoothed DEM, bridges and tunnels interpolated) when a DEM was used,\notherwise the source GPX elevation. `gpx_ele` always holds the source GPX elevation for comparison.",
       "properties": {
         "step_m": {
           "type": "number"
@@ -463,13 +791,27 @@
             ]
           },
           "type": "array"
+        },
+        "gpx_ele": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
         }
       },
       "required": [
         "step_m",
         "source",
         "m",
-        "ele"
+        "ele",
+        "gpx_ele"
       ],
       "type": "object",
       "title": "ProfileFile"
@@ -542,6 +884,125 @@
       ],
       "type": "object",
       "title": "RouteSummary"
+    },
+    "ScoresFile": {
+      "properties": {
+        "rules_profile": {
+          "type": "string"
+        },
+        "criteria": {
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          },
+          "type": "array"
+        },
+        "route": {
+          "$ref": "#/$defs/StretchStats"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/SectionScores"
+          },
+          "type": "array"
+        },
+        "climbs": {
+          "items": {
+            "$ref": "#/$defs/Climb"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "rules_profile",
+        "criteria",
+        "route",
+        "sections",
+        "climbs"
+      ],
+      "type": "object",
+      "title": "ScoresFile"
+    },
+    "SectionScores": {
+      "properties": {
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "ascent_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descent_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_grade_500m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Steepest 500 m average gradient (%) in travel direction"
+        },
+        "shares": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Layer id -> value -> share of length (0-1)",
+          "type": "object"
+        },
+        "criteria": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CriterionShare"
+          },
+          "type": "object"
+        },
+        "essential_pass": {
+          "description": "Share of length meeting all essential criteria",
+          "type": "number"
+        },
+        "important_pass": {
+          "description": "Share of length meeting all important criteria",
+          "type": "number"
+        },
+        "number": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "from_m",
+        "to_m",
+        "ascent_m",
+        "descent_m",
+        "max_grade_500m",
+        "shares",
+        "criteria",
+        "essential_pass",
+        "important_pass",
+        "number"
+      ],
+      "type": "object",
+      "title": "SectionScores"
     },
     "SectionsFile": {
       "properties": {
@@ -735,6 +1196,85 @@
       ],
       "type": "object",
       "title": "StatusShare"
+    },
+    "StretchStats": {
+      "description": "Summary statistics over a stretch of route: the whole route, or one daily section.",
+      "properties": {
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "ascent_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descent_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_grade_500m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Steepest 500 m average gradient (%) in travel direction"
+        },
+        "shares": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "description": "Layer id -> value -> share of length (0-1)",
+          "type": "object"
+        },
+        "criteria": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CriterionShare"
+          },
+          "type": "object"
+        },
+        "essential_pass": {
+          "description": "Share of length meeting all essential criteria",
+          "type": "number"
+        },
+        "important_pass": {
+          "description": "Share of length meeting all important criteria",
+          "type": "number"
+        }
+      },
+      "required": [
+        "from_m",
+        "to_m",
+        "ascent_m",
+        "descent_m",
+        "max_grade_500m",
+        "shares",
+        "criteria",
+        "essential_pass",
+        "important_pass"
+      ],
+      "type": "object",
+      "title": "StretchStats"
     }
   },
   "description": "Root type used only to export one JSON Schema containing every bundle file type.",
@@ -751,6 +1291,15 @@
     "profile": {
       "$ref": "#/$defs/ProfileFile"
     },
+    "events": {
+      "$ref": "#/$defs/EventsFile"
+    },
+    "minor": {
+      "$ref": "#/$defs/MinorFile"
+    },
+    "scores": {
+      "$ref": "#/$defs/ScoresFile"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointer"
     }
@@ -760,6 +1309,9 @@
     "sections",
     "findings",
     "profile",
+    "events",
+    "minor",
+    "scores",
     "current"
   ],
   "type": "object",

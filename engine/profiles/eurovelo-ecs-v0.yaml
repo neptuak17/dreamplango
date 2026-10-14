@@ -1,0 +1,57 @@
+# Indicative ECS-style check, version 0.
+#
+# Structure follows the EuroVelo European Certification Standard: 1 km minor sections, criteria grouped into
+# "essential" (must hold on 100% of the route) and "important" (at least 70%). The THRESHOLDS BELOW ARE
+# PLACEHOLDERS chosen for plausibility; they have not been checked against the ECS manual. Results are an
+# indicative audit, not an ECS assessment.
+id: eurovelo-ecs-v0
+title: Indicative ECS-style check (v0, placeholder thresholds)
+minor_section_m: 1000
+
+criteria:
+  continuity:
+    tier: essential
+    title: Continuity
+    description: The kilometre follows mapped ways (at most 20% unmatched) and has no missing link.
+    max_unmatched_share: 0.2
+
+  traffic_safety:
+    tier: essential
+    title: Traffic safety
+    description: At most 100 m of heavy or fast traffic (LTS 4) in the kilometre.
+    max_lts4_m: 100
+
+  low_traffic:
+    tier: important
+    title: Low traffic
+    description: At least 80% of the kilometre is car-free or calm (LTS 1-2).
+    min_share: 0.8
+
+  surface:
+    tier: important
+    title: Rideable surface
+    description: At least 80% of the kilometre is paved or compacted (assumed-paved roads count).
+    good: [paved_smooth, paved_assumed, paved_rough, compacted]
+    min_share: 0.8
+
+  gradient:
+    tier: important
+    title: Gradients
+    description: No 100 m stretch steeper than 8%.
+    fail_classes: [very_steep, extreme]
+
+  signage:
+    tier: important
+    title: Signposting
+    description: EuroVelo publishes the daily section as signed.
+
+findings:
+  busy_road_min_m: 1000
+  busy_road_merge_m: 1000   # busy stretches separated by less than this are one finding
+  unpaved_min_m: 1000
+  unmatched_min_m: 300
+  steep_min_m: 300
+  climb_min_fiets: 2.0
+  merge_gap_m: 200
+  osm_route_min_share: 0.5
+  length_mismatch: 0.10

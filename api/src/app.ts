@@ -12,6 +12,9 @@ const CONTENT_TYPES: Record<BundleFile, string> = {
   sections: "application/json",
   findings: "application/json",
   profile: "application/json",
+  events: "application/json",
+  minor: "application/json",
+  scores: "application/json",
 };
 
 export function createApp(store: BundleStore) {
@@ -64,10 +67,9 @@ export function createApp(store: BundleStore) {
   };
 
   app.get("/v1/routes/:network/:ref", serve("manifest"));
-  app.get("/v1/routes/:network/:ref/path", serve("path"));
-  app.get("/v1/routes/:network/:ref/sections", serve("sections"));
-  app.get("/v1/routes/:network/:ref/findings", serve("findings"));
-  app.get("/v1/routes/:network/:ref/profile", serve("profile"));
+  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores"] as const) {
+    app.get(`/v1/routes/:network/:ref/${file}`, serve(file));
+  }
 
   return app;
 }

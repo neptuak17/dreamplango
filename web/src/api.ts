@@ -1,10 +1,14 @@
 import type {
   BundleManifest,
   DevelopmentLevel,
+  EventsFile,
   FindingsFile,
+  GapType,
+  MinorFile,
   ProfileFile,
   Route,
   RouteSummary,
+  ScoresFile,
   SectionsFile,
   Signage,
 } from "@dpg/contracts";
@@ -27,6 +31,8 @@ export interface RideProps {
   development: DevelopmentLevel;
   signage: Signage;
   status: string;
+  /** Path measure (m) of every coordinate. */
+  m: number[];
 }
 
 export interface GapProps {
@@ -34,6 +40,7 @@ export interface GapProps {
   component: string;
   at_m: number;
   straight_distance_m: number;
+  gap_type: GapType | null;
 }
 
 export interface PathFeature {
@@ -53,6 +60,10 @@ export interface RouteBundle {
   sections: SectionsFile;
   findings: FindingsFile;
   profile: ProfileFile;
+  /** Audit layers; absent in geometry-only bundles. */
+  events: EventsFile | null;
+  minor: MinorFile | null;
+  scores: ScoresFile | null;
 }
 
 async function get<T>(url: string): Promise<T> {
@@ -61,16 +72,26 @@ async function get<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function getOptional<T>(url: string): Promise<T | null> {
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${url}`);
+  return (await res.json()) as T;
+}
+
 export const listRoutes = () => get<{ routes: RouteListing[] }>("/v1/routes").then((r) => r.routes);
 
 export async function loadBundle(network: string, ref: string): Promise<RouteBundle> {
   const base = `/v1/routes/${network}/${ref.toLowerCase()}`;
-  const [manifest, path, sections, findings, profile] = await Promise.all([
+  const [manifest, path, sections, findings, profile, events, minor, scores] = await Promise.all([
     get<BundleManifest>(base),
     get<PathCollection>(`${base}/path`),
     get<SectionsFile>(`${base}/sections`),
     get<FindingsFile>(`${base}/findings`),
     get<ProfileFile>(`${base}/profile`),
+    getOptional<EventsFile>(`${base}/events`),
+    getOptional<MinorFile>(`${base}/minor`),
+    getOptional<ScoresFile>(`${base}/scores`),
   ]);
-  return { manifest, path, sections, findings, profile };
+  return { manifest, path, sections, findings, profile, events, minor, scores };
 }

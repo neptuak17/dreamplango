@@ -1,0 +1,16 @@
+# Route-specific knowledge for EuroVelo 8 that the data alone can't establish.
+route: eurovelo:ev8
+
+# Gap classifications used when OSM ferry routes don't settle a gap (keyed by the section before the gap).
+gaps:
+  - after_section: 137
+    type: ferry
+    note: >-
+      Aegean crossing from Athens to Türkiye: very likely by ferry (owner's assessment). There seems to be no
+      direct sailing, so probably via an island such as Lesvos to Dikili or Ayvalık; check routes and seasons.
+  - after_section: 145
+    type: ferry
+    note: >-
+      Sea crossing from Türkiye to Cyprus: very likely by ferry (owner's assessment). Sailings appear to leave from
+      Türkiye's south coast (e.g. Taşucu or Mersin to northern Cyprus), so expect a long transfer from Selçuk and a
+      crossing of the line dividing Cyprus to reach Nicosia.
