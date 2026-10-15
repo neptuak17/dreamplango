@@ -1,7 +1,7 @@
 # DreamPlanGo — System Design (V1 proposal)
 
-**Status:** Living design, 2026-10-15. Decisions D1–D25 are recorded below, and milestones M0–M2 are built (section 11).
-**Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports).
+**Status:** Living design, 2026-10-15. Decisions D1–D30 are recorded below, and milestones M0–M2 are built (section 11).
+**Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports, white-label partner widgets).
 
 ---
 
@@ -24,6 +24,14 @@
    Commercial services are used only where open data is weak, or where licences require them for production (mainly weather).
 6. **A consumer app with no accounts is feasible** (section 9). The rule is "the server knows routes; the device knows the rider." Purchases go through StoreKit 2 and sync through the user's own iCloud. GPS location never leaves the phone, and live data is requested by route block, not by position.
 7. **Work inside WSL2 (Ubuntu, arm64) on the Windows on ARM laptop.** The Python geospatial stack (GDAL, rasterio, pyosmium, DuckDB spatial) works reliably on Linux arm64. On native Windows-on-ARM it is patchy.
+
+### Customers (D26)
+
+| Priority | Who | What DreamPlanGo gives them | Where it lives in this design |
+|---|---|---|---|
+| **1** | **Individuals**: cyclists now, other adventurers later. Their routes come from networks (EuroVelo, USBRS), from their own GPX files, or from files shared on other platforms and route libraries. | Help finding the adventure that suits their tastes and capabilities, then planning and riding it with local knowledge at their side | Consumer app and prototype (sections 9, 11, 12); user routes (D22–D25, 11.3) |
+| **2** (possible) | **Route network organisations**: curators who assemble routes from many partners and lack the resources to check them | Regular audits against *their* standards, showing what fails and what to fix, with little effort on their part | Rules profiles per network (8.5); B2B section of 12 |
+| **3** (possible) | **Route publishers**: networks, route libraries (Bikepacking.com, Epic Road Rides), tour companies, tourism sites and associations | A simple, branded widget or hosted page on their own site to present their routes and offer planning tools (D29) | B2B section of 12; privacy in 9.4 |
 
 ### Decision log
 
@@ -54,6 +62,11 @@
 | D23 | 2026-10-15 | **Places are a shared catalogue; their position along a route is computed per route.** Conflated places (OSM plus Overture, D16) are stored once by area (H3 cells), each version tied to its source snapshots. Any route, of any network or uploaded by a user, draws from that catalogue. Only the route-relative parts (position on the route, detour, whether it counts, gaps) are computed per route. Road layers follow the same idea: values derived from matched OSM ways are cached per way, so routes that share roads share results, and overlap with an audited route can be reported ("62% of this route follows EV8"). Later, routing tiles built per country or region, rather than per route corridor, let a new route be audited without a new tile build. See 11.3. |
 | D24 | 2026-10-15 | **POIs that come with a user's file stay private to that route.** Waypoints and FIT course points become *user places* (`source: user`), stored only with that route's audit. They are shown on the map and in the Ahead list with their own style, and may be linked to a matching public place to show its details; that link stays private too. They can optionally count towards that route's own gap figures. They never enter the shared catalogue, are never conflated into public places, and are never shown to anyone else. The pattern follows the private business layers in 8.6. |
 | D25 | 2026-10-15 | **Every audit is either public or private.** Network routes are public. A user's route and everything derived from it (bundle, user places, findings) is private: never listed by the API, never added to shared data, and in production returned to the device rather than kept (section 9). Shared data fetched for a private route is cached by coarse area (H3 cells), never by that route's corridor, and corridors are not logged, because a stored corridor would reveal the route. A user file's licence is treated as unknown, so it is never redistributed. On the laptop prototype, private bundles live apart from public ones and are marked as such in their manifest. |
+| D26 | 2026-10-15 | **Customers, in priority order** (see "Customers" above): 1) individuals finding, planning and riding adventures, cycling first; 2) possibly, route network organisations wanting regular audits against their own standards; 3) possibly, route publishers wanting a white-label widget (D29). Design choices are weighed against all three; individuals come first. |
+| D27 | 2026-10-15 | **Third-party route libraries are never harvested without a partnership.** That rules out bulk import from Komoot, Ride with GPS, Bikepacking.com and others; a partnership with Komoot is unlikely given the overlap. Partnerships are more likely with Bikepacking.com, Epic Road Rides, or local tour companies and associations. Partner routes are audited and shown under that partnership's terms. Without one, a library route reaches DreamPlanGo only as a rider's own private upload (D25). |
+| D28 | 2026-10-15 | **The next network after EuroVelo is not chosen yet.** The likely factors are how complete the network is and how many active users it has. Adding it means a route-source adapter and a rules profile for its standards (D22, 8.5). |
+| D29 | 2026-10-15 | **White-label means a widget or hosted page that a partner embeds on its own site.** Most partners are small, so it has to be simple to adopt. It covers the Dream and Plan phases only, for now. It reads the partner's public route data from our API, and planning runs in the visitor's browser; nothing about the visitor is stored. The partner sees route-level counts at most, never who viewed what or where they are. Partner staff may have business logins to manage their routes and branding (9.4). A later tie-in, to be discussed: plan on the partner's site, then buy the on-the-road companion as a Trip Pass in the DreamPlanGo app. |
+| D30 | 2026-10-15 | **No accounts and privacy-first for as long as possible,** for riders in the app and for visitors to partner sites. If a feature appears to need rider accounts, work stops so it can be discussed with the owner before any design. The mechanisms in section 9 come first. |
 
 ---
 
@@ -540,6 +553,7 @@ On the App Store, Apple's definition of "collected" excludes data processed only
 |---|---|
 | **B2B portal** (route curators, tourism boards) | None needed: accounts here are fine, since this is business contact data under contract. Use Cloudflare Access or simple organisation logins. |
 | **Selling outside the App Store** (web, Android, gift passes) | Redeemable **Trip Pass codes** (bearer tokens), plus Google Play Billing on Android. Still no account. |
+| **White-label partner sites** (D29) | Visitors need no account. The widget reads public route data and plans in the browser; a saved plan stays in the browser or is exported as a file or an encrypted share link. Partner staff use business logins (as for the B2B portal). Any later need for rider accounts is discussed with the owner first (D30). |
 | **Sharing a trip with riding partners** | **End-to-end encrypted share links**: plan encrypted on device, key in the URL fragment (never sent to the server), blob stored with expiry. |
 | **Paid passes for arbitrary user GPX routes** | A consumable purchase can't be restored by Apple. Store an anonymous entitlement token in iCloud Keychain, with a server-side record keyed by hashed transaction id. Still pseudonymous, still no account. |
 
@@ -785,8 +799,10 @@ file (GPX / FIT / …)
 - **Fully offline** (bundle + vector tiles), with live layers when there's signal.
 - **Anonymous rider reports** that feed the next audit.
 
-### B2B (route curators, NECCs, tourism boards)
+### B2B (route curators, NECCs, tourism boards, route publishers)
 
+- **Regular audits against the network's own standards** (customer priority 2, D26). Each network gets its own rules profile; ECS is the first. Re-audits run on a schedule, with change tracking (below).
+- **White-label route library and planner** (customer priority 3, D29). A simple widget or hosted page, branded for the partner and embedded on its site, covering Dream and Plan. It uses only partner routes we have rights to (D27), and visitors need no account (D30).
 - **ECS-aligned pre-assessment reports** with maps and evidence. Indicative only; position as complementary to official certification, ideally in partnership with ECF.
 - **Change tracking** between audits ("+38 km developed, 2 gaps closed").
 - **Impact-ranked interventions.** "Fixing these 3.1 km would create 140 km of continuous LTS ≤ 2 route", an output curators struggle to get today.
