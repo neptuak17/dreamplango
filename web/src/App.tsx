@@ -20,22 +20,27 @@ import {
   type Stretch,
   stretchesFor,
 } from "./layers";
-import { Profile } from "./Profile";
 import { RouteMap } from "./RouteMap";
 import {
   aheadByService,
-  DEFAULT_SHOWN,
+  DEFAULT_FILTERS,
+  type Density,
+  DENSITY_LABELS,
   distanceLabel,
+  filterKey,
   GAP_LABELS,
   GAP_PALETTE,
   GAP_ROWS,
   gapStretches,
+  MAP_FILTERS,
   MONTHS,
   monthState,
   SERVICE_STYLE,
+  spacingFor,
+  thin,
 } from "./services";
 import { DEVELOPMENT, km, SEVERITY, SIGNAGE } from "./status";
-import { Strip, type StripRow } from "./Strip";
+import { Track, type StripRow } from "./Track";
 
 type Tab = "sections" | "findings" | "ahead";
 type AuditLayer = Exclude<LayerKey, "status">;
@@ -43,11 +48,21 @@ type Detour = "counting" | number;
 const AUDIT_LAYERS: AuditLayer[] = ["ecs", "infrastructure", "traffic_stress", "surface", "cycle_network", "gradient"];
 const DETOURS: Detour[] = ["counting", 500, 1000, 2000, 5000, 10000, 20000];
 const WINDOWS_KM = [25, 50, 100, 200];
+const GAP_SERVICES = ["water", "food", "accommodation", "bike_shop", "station"];
+const COLLAPSE_KEY = "dpg.summaryCollapsed";
 const pct = (x: number | undefined) => `${Math.round((x ?? 0) * 100)}%`;
 
 function readHashSection(): number | null {
   const match = /section=(\d+)/.exec(window.location.hash);
   return match ? Number(match[1]) : null;
+}
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** Range findings belong to every section they overlap; point findings to the section starting at or before them. */
@@ -93,91 +108,86 @@ function Dot({ service }: { service: string }) {
   return <span className="svc-dot" style={{ "--c": SERVICE_STYLE[service]?.color ?? "#495057" } as React.CSSProperties} />;
 }
 
-function StatsCard({ stats, title }: { stats: StretchStats; title: string }) {
-  const lts = stats.shares.traffic_stress ?? {};
-  const surf = stats.shares.surface ?? {};
-  const infra = stats.shares.infrastructure ?? {};
-  const carFree = (infra.cycleway ?? 0) + (infra.shared_path ?? 0) + (infra.separated_track ?? 0);
-  const unpaved = (surf.gravel ?? 0) + (surf.dirt ?? 0);
+function Kpi({ value, label, title, over }: { value: React.ReactNode; label: React.ReactNode; title: string; over?: boolean }) {
   return (
-    <div className="card">
-      <div className="card-title">{title}</div>
-      <div className="kpis">
-        <div title="Share of length meeting all essential criteria (indicative)">
-          <b>{pct(stats.essential_pass)}</b>
-          <span>essential ✓</span>
-        </div>
-        <div title="Share of length meeting all important criteria">
-          <b>{pct(stats.important_pass)}</b>
-          <span>important ✓</span>
-        </div>
-        <div title="Car-free paths and separated tracks">
-          <b>{pct(carFree)}</b>
-          <span>car-free</span>
-        </div>
-        <div title="Busy roads (LTS 4)">
-          <b>{pct(lts["4"])}</b>
-          <span>busy roads</span>
-        </div>
-        <div title="Loose gravel, dirt or sand">
-          <b>{pct(unpaved)}</b>
-          <span>unpaved</span>
-        </div>
-        <div title="Total climbing, smoothed terrain model">
-          <b>{stats.ascent_m != null ? `${stats.ascent_m.toLocaleString("en-GB")} m` : "–"}</b>
-          <span>climbing</span>
-        </div>
-      </div>
+    <div className="kpi" title={title}>
+      <b className={over ? "over" : ""}>{value}</b>
+      <span>{label}</span>
     </div>
   );
 }
 
-const GAP_SERVICES = ["water", "food", "accommodation", "bike_shop", "station"];
-
-/** Longest stretch without each service: for one month, or the worst month when no month is chosen. */
-function ServicesCard({
+/**
+ * The selection's figures in two tight rows: infrastructure, then the longest stretch without each service.
+ * Explanations live in the tooltips.
+ */
+function KpiBand({
+  title,
+  stats,
   services,
-  section,
+  sectionServices,
   month,
 }: {
-  services: ServicesFile;
-  section: SectionServices | null;
+  title: string;
+  stats: StretchStats | null;
+  services: ServicesFile | null;
+  sectionServices: SectionServices | null;
   month: number | null;
 }) {
-  const gaps = section ? section.longest_gap_m : services.route_longest_gap_m;
+  const lts = stats?.shares.traffic_stress ?? {};
+  const surf = stats?.shares.surface ?? {};
+  const infra = stats?.shares.infrastructure ?? {};
+  const carFree = (infra.cycleway ?? 0) + (infra.shared_path ?? 0) + (infra.separated_track ?? 0);
+  const gaps = sectionServices ? sectionServices.longest_gap_m : services?.route_longest_gap_m;
+  const types = Object.fromEntries((services?.types ?? []).map((t) => [t.id, t]));
   const pick = (v: number[] | undefined) => (v ? (month === null ? Math.max(...v) : (v[month] ?? 0)) : 0);
-  const titles = Object.fromEntries(services.types.map((t) => [t.id, t]));
   return (
-    <div className="card">
-      <div className="card-title">
-        Longest stretch without … {month === null ? "(worst month)" : `(${MONTHS[month]})`}
-      </div>
-      <div className="kpis">
-        {GAP_SERVICES.map((s) => {
-          const t = titles[s];
-          const value = pick(gaps[s]);
-          const over = t?.gap_m != null && value > t.gap_m;
-          return (
-            <div key={s} title={t ? `${t.title}: counts within ${distanceLabel(t.count_m)} by bike` : s}>
-              <b className={over ? "over" : ""}>{km(value)} km</b>
-              <span>
-                <Dot service={s} /> {SERVICE_STYLE[s]?.short ?? s}
-                {s === "water" ? " / shop" : ""}
-              </span>
-            </div>
-          );
-        })}
-        {section && (
-          <div title="Counted accommodation on this daily section">
-            <b>{section.counts.accommodation ?? 0}</b>
-            <span>beds on section</span>
+    <div className="kpi-band">
+      <div className="kpi-title">{title}</div>
+      {stats && (
+        <div className="kpi-row">
+          <Kpi value={pct(stats.essential_pass)} label="essential" title="Share of length meeting all essential criteria (indicative ECS-style check)" />
+          <Kpi value={pct(stats.important_pass)} label="important" title="Share of length meeting all important criteria" />
+          <Kpi value={pct(carFree)} label="car-free" title="Cycle paths, shared paths and separated tracks" />
+          <Kpi value={pct(lts["4"])} label="busy roads" title="Busy roads: traffic stress (LTS) 4" />
+          <Kpi value={pct((surf.gravel ?? 0) + (surf.dirt ?? 0))} label="unpaved" title="Loose gravel, dirt or sand" />
+          <Kpi
+            value={stats.ascent_m != null ? `${stats.ascent_m.toLocaleString("en-GB")} m` : "–"}
+            label="climbing"
+            title="Total climbing from the smoothed terrain model"
+          />
+        </div>
+      )}
+      {services && gaps && (
+        <>
+          <div className="kpi-subtitle">
+            Longest stretch without {month === null ? "(worst month)" : `(${MONTHS[month]})`}
           </div>
-        )}
-      </div>
-      <div className="muted card-note">
-        Published opening season: {pct(services.season_known.accommodation)} of accommodation,{" "}
-        {pct(services.season_known.food)} of food places. Unknown seasons count as open, so autumn gaps may be longer.
-      </div>
+          <div className="kpi-row">
+            {GAP_SERVICES.map((s) => {
+              const t = types[s];
+              const value = pick(gaps[s]);
+              const how = t ? `counts within ${distanceLabel(t.count_m)}${t.count_min ? ` / ${t.count_min} min` : ""} by bike` : "";
+              return (
+                <Kpi
+                  key={s}
+                  value={`${km(value)} km`}
+                  label={
+                    <>
+                      <Dot service={s} /> {s === "water" ? "water" : s === "bike_shop" ? "bikes" : SERVICE_STYLE[s]?.short}
+                    </>
+                  }
+                  title={`${t?.title ?? s}: ${how}${t?.gap_m ? `; finding above ${km(t.gap_m)} km` : ""}${s === "water" ? ". Shops and cafés count too." : ""}`}
+                  over={t?.gap_m != null && value > t.gap_m}
+                />
+              );
+            })}
+            {sectionServices && (
+              <Kpi value={sectionServices.counts.accommodation ?? 0} label="beds here" title="Accommodation that counts on this daily section" />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -192,10 +202,14 @@ export function App() {
   const [selectedFinding, setSelectedFinding] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<Severity>>(new Set(["info"]));
   const [layer, setLayer] = useState<LayerKey>("infrastructure");
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   // Services (M2)
   const [month, setMonth] = useState<number | null>(null);
-  const [shown, setShown] = useState<Set<string>>(new Set(DEFAULT_SHOWN));
+  const [shown, setShown] = useState<Set<string>>(new Set(DEFAULT_FILTERS));
   const [detour, setDetour] = useState<Detour>("counting");
+  const [density, setDensity] = useState<Density>("auto");
+  const [lowConfidence, setLowConfidence] = useState(false);
+  const [zoom, setZoom] = useState(8);
   const [aheadM, setAheadM] = useState<number | null>(null);
   const [windowKm, setWindowKm] = useState(50);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -238,6 +252,14 @@ export function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+    } catch {
+      // storage unavailable (private window): the choice just isn't remembered
+    }
+  }, [collapsed]);
 
   const findings = bundle?.findings.findings ?? [];
   const visibleFindings = useMemo(() => findings.filter((f) => !hidden.has(f.severity)), [findings, hidden]);
@@ -283,6 +305,7 @@ export function App() {
     const d = bundle?.sections.daily.find((x) => x.number === selectedSection);
     return d ? ([d.from_m, d.to_m] as [number, number]) : null;
   }, [bundle, selectedSection]);
+  const aheadActive = tab === "ahead" && aheadM !== null;
   const placesRange: [number, number] | null =
     tab === "ahead" && aheadM !== null ? [aheadM, aheadM + windowKm * 1000] : sectionRange;
   const serviceIds = useMemo(() => bundle?.services?.types.map((t) => t.id) ?? [], [bundle]);
@@ -312,23 +335,45 @@ export function App() {
     // placesRange is derived; its two numbers are the real dependencies.
   }, [bundle, listing, serviceIds, placesRange?.[0], placesRange?.[1], month, detour]);
 
-  const mapPlaces = useMemo(() => places.filter((p) => shown.has(p.service)), [places, shown]);
-  const ahead = useMemo(() => (aheadM === null ? new Map<string, Place[]>() : aheadByService(places, aheadM, 3)), [places, aheadM]);
-  const marker = useMemo(() => (slicer && aheadM !== null && tab === "ahead" ? slicer.pointAt(aheadM) : null), [slicer, aheadM, tab]);
-
-  const gapRows = useMemo<StripRow[]>(
-    () =>
-      bundle?.services
-        ? GAP_ROWS.map((r, i) => ({
-            key: `gap:${r.key}`,
-            title: r.title + (r.key !== "bail_out" && month !== null ? ` (${MONTHS[month]})` : ""),
-            palette: GAP_PALETTE,
-            stretches: gapStretches(bundle.services, r.key, month),
-            separated: i === 0,
-          }))
-        : [],
-    [bundle, month],
+  // The map shows a filtered, thinned view; the Ahead list and gap figures use every place.
+  const filteredPlaces = useMemo(
+    () => places.filter((p) => shown.has(filterKey(p)) && (lowConfidence || p.confidence !== "low")),
+    [places, shown, lowConfidence],
   );
+  const spacing = spacingFor(density, zoom);
+  const mapPlaces = useMemo(() => {
+    const out = thin(filteredPlaces, spacing);
+    const picked = places.find((p) => p.id === selectedPlace);
+    return picked && !out.includes(picked) ? [...out, picked] : out;
+  }, [filteredPlaces, spacing, places, selectedPlace]);
+  const ahead = useMemo(() => (aheadM === null ? new Map<string, Place[]>() : aheadByService(places, aheadM, 3)), [places, aheadM]);
+  const marker = useMemo(
+    () => (slicer && aheadActive && aheadM !== null ? slicer.pointAt(aheadM) : null),
+    [slicer, aheadActive, aheadM],
+  );
+
+  const stripRows = useMemo<StripRow[]>(() => {
+    if (!bundle?.events) return [];
+    const layerRows = AUDIT_LAYERS.map((l) => ({
+      key: l,
+      title: LAYER_TITLES[l],
+      palette: PALETTES[l],
+      stretches: stretches[l],
+      describe: (s: Stretch) => valueLabels[l]?.[s.value] ?? s.value,
+    }));
+    const gapRows = bundle.services
+      ? GAP_ROWS.map((r, i) => ({
+          key: `gap:${r.key}`,
+          title: r.title + (r.key !== "bail_out" && month !== null ? ` (${MONTHS[month]})` : ""),
+          palette: GAP_PALETTE,
+          stretches: gapStretches(bundle.services, r.key, month),
+          describe: (s: Stretch) => `${r.title.replace(" gaps", "")} gap ${km(s.to_m - s.from_m)} km`,
+          hint: `${r.title}: red = ${GAP_LABELS.long.toLowerCase()}, amber = ${GAP_LABELS.near.toLowerCase()}`,
+          separated: i === 0,
+        }))
+      : [];
+    return [...layerRows, ...gapRows];
+  }, [bundle, stretches, valueLabels, month]);
 
   if (error) return <div className="center error">Could not load data: {error}</div>;
   if (!routes) return <div className="center muted">Loading routes…</div>;
@@ -344,10 +389,10 @@ export function App() {
   const summary = bundle?.manifest.summary;
   const totalLength = summary?.ride_length_m ?? 0;
   const range: [number, number] = section ? [section.from_m, section.to_m] : [0, totalLength];
-  const audited = Boolean(bundle?.events);
   const stats: StretchStats | null = section ? (scoresBySection.get(section.number) ?? null) : (bundle?.scores?.route ?? null);
   const legendShares = layer !== "status" ? shareOf(stretches[layer], range[0], range[1]) : {};
   const services = bundle?.services ?? null;
+  const audited = Boolean(bundle?.events);
 
   const selectFinding = (f: Finding) => {
     setSelectedFinding(f.id);
@@ -364,11 +409,11 @@ export function App() {
       return next;
     });
 
-  const toggleService = (s: string) =>
+  const toggleFilter = (key: string) =>
     setShown((prev) => {
       const next = new Set(prev);
-      if (next.has(s)) next.delete(s);
-      else next.add(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
 
@@ -378,16 +423,23 @@ export function App() {
     setTab("ahead");
   };
 
-  const stripRows: StripRow[] = [
-    ...AUDIT_LAYERS.map((l) => ({ key: l, title: LAYER_TITLES[l], palette: PALETTES[l], stretches: stretches[l] })),
-    ...gapRows,
-  ];
+  const densityNote = spacing === null ? "all" : `best per ${km(spacing)} km`;
 
   return (
     <div className="app">
       <aside className="sidebar">
         <header>
-          <div className="eyebrow">DreamPlanGo · audit viewer (M2)</div>
+          <div className="header-top">
+            <div className="eyebrow">DreamPlanGo · audit viewer (M2)</div>
+            <button
+              className="collapse"
+              onClick={() => setCollapsed((c) => !c)}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Show the summary" : "Hide the summary to make room for the list"}
+            >
+              {collapsed ? "Show summary ▾" : "Hide summary ▴"}
+            </button>
+          </div>
           {routes.length > 1 ? (
             <select value={routeId ?? ""} onChange={(e) => setRouteId(e.target.value)}>
               {routes.map((r) => (
@@ -402,15 +454,15 @@ export function App() {
           {bundle && summary && (
             <>
               <div className="stats">
-                <div>
-                  <b>{km(summary.ride_length_m)}</b> km ridden
-                </div>
-                <div>
-                  <b>{summary.daily_section_count}</b> daily sections
-                </div>
-                <div title="Places where the published track stops and restarts elsewhere">
-                  <b>{summary.gap_count}</b> gaps ({km(summary.gap_straight_distance_m)} km straight-line)
-                </div>
+                <span>
+                  <b>{km(summary.ride_length_m)}</b> km
+                </span>
+                <span>
+                  <b>{summary.daily_section_count}</b> sections
+                </span>
+                <span title="Places where the published track stops and restarts elsewhere">
+                  <b>{summary.gap_count}</b> gaps ({km(summary.gap_straight_distance_m)} km)
+                </span>
               </div>
               <div className="bar" aria-label="Share of route by EuroVelo development status">
                 {summary.status_breakdown.map((s) => (
@@ -422,24 +474,33 @@ export function App() {
                   />
                 ))}
               </div>
-              {stats && (
-                <StatsCard
-                  stats={stats}
-                  title={section ? `Section ${section.number} · ${km(section.length_m, 1)} km` : "Whole route"}
-                />
+              {!collapsed && (
+                <>
+                  <KpiBand
+                    title={section ? `Section ${section.number} · ${km(section.length_m, 1)} km` : "Whole route"}
+                    stats={stats}
+                    services={services}
+                    sectionServices={section ? (servicesBySection.get(section.number) ?? null) : null}
+                    month={month}
+                  />
+                  <details className="about">
+                    <summary>ⓘ About this audit</summary>
+                    <div>
+                      Bundle {bundle.manifest.run_id} · {bundle.manifest.pipeline.name}
+                      {bundle.scores && <> · rules: {bundle.scores.rules_profile}</>}
+                      {services && <> · services: {services.rules_profile}, season {services.season_year}</>}
+                    </div>
+                    {services && (
+                      <div>
+                        Published opening season: {pct(services.season_known.accommodation)} of accommodation,{" "}
+                        {pct(services.season_known.food)} of food places. Unknown seasons count as open, so autumn gaps
+                        may be longer.
+                      </div>
+                    )}
+                    <div>ECS-style figures are indicative; infrastructure thresholds are placeholders (D13).</div>
+                  </details>
+                </>
               )}
-              {services && (
-                <ServicesCard
-                  services={services}
-                  section={section ? (servicesBySection.get(section.number) ?? null) : null}
-                  month={month}
-                />
-              )}
-              <div className="run muted">
-                Bundle {bundle.manifest.run_id} · {bundle.manifest.pipeline.name}
-                {bundle.scores && <> · rules: {bundle.scores.rules_profile}</>}
-                {services && <> · services: {services.rules_profile}, season {services.season_year}</>}
-              </div>
             </>
           )}
         </header>
@@ -512,37 +573,57 @@ export function App() {
               const fs = findingsBySection.get(d.number) ?? [];
               const sc = scoresBySection.get(d.number);
               const sv = servicesBySection.get(d.number);
+              const isSelected = d.number === selectedSection;
               return (
                 <button
                   key={d.id}
-                  className={`row${d.number === selectedSection ? " selected" : ""}`}
+                  className={`row compact${isSelected ? " selected" : ""}`}
                   onClick={() => {
                     setSelectedFinding(null);
                     setSelectedPlace(null);
-                    setSelectedSection(d.number === selectedSection ? null : d.number);
+                    setSelectedSection(isSelected ? null : d.number);
                   }}
                 >
                   <span className="row-num">{String(d.number).padStart(3, "0")}</span>
                   <span className="row-main">
                     <span className="row-title">{d.title}</span>
                     <span className="row-sub">
-                      <StatusDot section={d} /> {d.status.label} · km {km(d.from_m)}–{km(d.to_m)} · {km(d.length_m, 1)} km
-                    </span>
-                    {sc && (
-                      <span className="row-sub">
-                        ↑ {sc.ascent_m ?? "–"} m · busy {pct(sc.shares.traffic_stress?.["4"])} · unpaved{" "}
-                        {pct((sc.shares.surface?.gravel ?? 0) + (sc.shares.surface?.dirt ?? 0))} · essential ✓{" "}
-                        {pct(sc.essential_pass)}
-                      </span>
-                    )}
-                    {sv && (
-                      <span className="row-sub">
-                        {["accommodation", "food", "water", "bike_shop", "station"].map((s) => (
-                          <span key={s} className="svc-count" title={`${s.replaceAll("_", " ")} that count on this section`}>
-                            <Dot service={s} />
-                            {sv.counts[s] ?? 0} {SERVICE_STYLE[s]?.short}
+                      <StatusDot section={d} /> km {km(d.from_m)}–{km(d.to_m)} · {km(d.length_m, 1)} km
+                      {sc && <> · ✓ {pct(sc.essential_pass)}</>}
+                      {sv && (
+                        <>
+                          {" · "}
+                          <span className="svc-count" title="Accommodation that counts on this section">
+                            <Dot service="accommodation" />
+                            {sv.counts.accommodation ?? 0}
                           </span>
-                        ))}
+                          <span className="svc-count" title="Food places that count on this section">
+                            <Dot service="food" />
+                            {sv.counts.food ?? 0}
+                          </span>
+                        </>
+                      )}
+                    </span>
+                    {isSelected && (
+                      <span className="row-more">
+                        <span>{d.status.label}</span>
+                        {sc && (
+                          <span>
+                            ↑ {sc.ascent_m ?? "–"} m · busy {pct(sc.shares.traffic_stress?.["4"])} · unpaved{" "}
+                            {pct((sc.shares.surface?.gravel ?? 0) + (sc.shares.surface?.dirt ?? 0))} · important ✓{" "}
+                            {pct(sc.important_pass)}
+                          </span>
+                        )}
+                        {sv && (
+                          <span>
+                            {["accommodation", "food", "water", "bike_shop", "station"].map((s) => (
+                              <span key={s} className="svc-count" title={`${s.replaceAll("_", " ")} that count on this section`}>
+                                <Dot service={s} />
+                                {sv.counts[s] ?? 0} {SERVICE_STYLE[s]?.short}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </span>
                     )}
                   </span>
@@ -579,8 +660,8 @@ export function App() {
             ))}
           {bundle && tab === "ahead" && aheadM === null && (
             <div className="muted pad">
-              Click the route on the map, or a band in the strip under the profile, to set your position. The list
-              shows the next places of each kind, with the distance along the route and the detour to reach them.
+              Click the route on the map, or the profile or strip under it, to set your position. The list shows the
+              next places of each kind, with the distance along the route and the detour to reach them.
             </div>
           )}
           {bundle &&
@@ -603,7 +684,7 @@ export function App() {
                         className={`ahead-row${p.id === selectedPlace ? " selected" : ""}${p.counts ? "" : " beyond"}`}
                         onClick={() => {
                           setSelectedPlace(p.id);
-                          setShown((prev) => new Set(prev).add(p.service));
+                          setShown((prev) => new Set(prev).add(filterKey(p)));
                         }}
                       >
                         <span className="ahead-km">+{km(p.access_at_m - aheadM, 1)} km</span>
@@ -645,6 +726,7 @@ export function App() {
                 selectedSection={selectedSection}
                 selectedFinding={selectedFinding}
                 selectedPlace={selectedPlace}
+                onZoom={setZoom}
                 onClickRoute={(n, [lon, lat]) => {
                   if (tab === "ahead") {
                     const m = slicer?.nearestM(n, lon, lat);
@@ -674,47 +756,56 @@ export function App() {
                   <option value="status">{LAYER_TITLES.status}</option>
                   {audited && AUDIT_LAYERS.map((l) => <option key={l} value={l}>{LAYER_TITLES[l]}</option>)}
                 </select>
-                {layer === "status" ? (
-                  <ul className="legend">
-                    {summary?.status_breakdown.map((s) => (
-                      <li key={`${s.development}-${s.signage}`}>
-                        <StatusDot section={{ status: { development: s.development, signage: s.signage, label: "" } }} />
-                        {DEVELOPMENT[s.development].label}, {SIGNAGE[s.signage]}
-                        <span className="num">{(s.share * 100).toFixed(0)}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul className="legend">
-                    {Object.entries(PALETTES[layer])
-                      .filter(([v]) => (legendShares[v] ?? 0) > 0)
-                      .sort(([a], [b]) => (legendShares[b] ?? 0) - (legendShares[a] ?? 0))
-                      .map(([v, color]) => (
-                        <li key={v}>
-                          <Swatch color={color} />
-                          {valueLabels[layer]?.[v] ?? v}
-                          <span className="num">{pct(legendShares[v])}</span>
+                <details className="panel-section" open>
+                  <summary className="panel-title">Legend</summary>
+                  {layer === "status" ? (
+                    <ul className="legend">
+                      {summary?.status_breakdown.map((s) => (
+                        <li key={`${s.development}-${s.signage}`}>
+                          <StatusDot section={{ status: { development: s.development, signage: s.signage, label: "" } }} />
+                          {DEVELOPMENT[s.development].label}, {SIGNAGE[s.signage]}
+                          <span className="num">{(s.share * 100).toFixed(0)}%</span>
                         </li>
                       ))}
-                  </ul>
-                )}
-                <div className="muted legend-note">{section ? `Shares for section ${section.number}` : "Shares for the whole route"}</div>
+                    </ul>
+                  ) : (
+                    <ul className="legend">
+                      {Object.entries(PALETTES[layer])
+                        .filter(([v]) => (legendShares[v] ?? 0) > 0)
+                        .sort(([a], [b]) => (legendShares[b] ?? 0) - (legendShares[a] ?? 0))
+                        .map(([v, color]) => (
+                          <li key={v}>
+                            <Swatch color={color} />
+                            {valueLabels[layer]?.[v] ?? v}
+                            <span className="num">{pct(legendShares[v])}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                  <div className="muted legend-note">{section ? `Shares for section ${section.number}` : "Shares for the whole route"}</div>
+                </details>
 
                 {services && (
-                  <div className="panel-section">
-                    <div className="panel-title">Places</div>
+                  <details className="panel-section" open>
+                    <summary className="panel-title">Places</summary>
                     <div className="svc-toggles">
-                      {services.types.map((t) => (
-                        <label key={t.id} title={`${t.title}: counts within ${distanceLabel(t.count_m)}${t.count_min ? ` / ${t.count_min} min` : " by road"}`}>
-                          <input type="checkbox" checked={shown.has(t.id)} onChange={() => toggleService(t.id)} />
-                          <Dot service={t.id} />
-                          {SERVICE_STYLE[t.id]?.short ?? t.id}
-                        </label>
-                      ))}
+                      {MAP_FILTERS.filter((f) => serviceIds.includes(f.service)).map((f) => {
+                        const t = services.types.find((x) => x.id === f.service);
+                        return (
+                          <label
+                            key={f.key}
+                            title={t ? `${t.title}: counts within ${distanceLabel(t.count_m)}${t.count_min ? ` / ${t.count_min} min` : " by road"}` : f.title}
+                          >
+                            <input type="checkbox" checked={shown.has(f.key)} onChange={() => toggleFilter(f.key)} />
+                            <Dot service={f.service} />
+                            {f.title}
+                          </label>
+                        );
+                      })}
                     </div>
-                    <div className="panel-row">
+                    <div className="panel-grid">
                       <label>
-                        Month{" "}
+                        Month
                         <select value={month ?? ""} onChange={(e) => setMonth(e.target.value === "" ? null : Number(e.target.value))}>
                           <option value="">any</option>
                           {MONTHS.map((name, i) => (
@@ -725,7 +816,7 @@ export function App() {
                         </select>
                       </label>
                       <label>
-                        Detour{" "}
+                        Detour
                         <select
                           value={String(detour)}
                           onChange={(e) => setDetour(e.target.value === "counting" ? "counting" : Number(e.target.value))}
@@ -737,48 +828,52 @@ export function App() {
                           ))}
                         </select>
                       </label>
+                      <label>
+                        Show
+                        <select value={density} onChange={(e) => setDensity(e.target.value as Density)}>
+                          {(Object.keys(DENSITY_LABELS) as Density[]).map((d) => (
+                            <option key={d} value={d}>
+                              {DENSITY_LABELS[d]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="check" title="Places known only to Overture, with a weak confidence score">
+                        <input type="checkbox" checked={lowConfidence} onChange={(e) => setLowConfidence(e.target.checked)} />
+                        low-confidence
+                      </label>
                     </div>
-                    <div className="muted legend-note">
+                    <div
+                      className="muted legend-note"
+                      title="Faded dots are beyond the counting limit. The Ahead list and the gap figures use every place."
+                    >
                       {placesRange
-                        ? `${mapPlaces.length.toLocaleString("en-GB")} shown of ${placesInfo?.total.toLocaleString("en-GB") ?? "…"} in ${
-                            tab === "ahead" && aheadM !== null ? `the next ${windowKm} km` : `section ${section?.number ?? ""}`
-                          }${placesInfo?.truncated ? " (first 5,000)" : ""}. Faded: beyond the counting limit. Month hides places known to be closed.`
+                        ? `${mapPlaces.length.toLocaleString("en-GB")} shown (${densityNote}) of ${placesInfo?.total.toLocaleString("en-GB") ?? "…"} in ${
+                            aheadActive ? `the next ${windowKm} km` : `section ${section?.number ?? ""}`
+                          }${placesInfo?.truncated ? " (first 5,000)" : ""}`
                         : "Select a section, or set a position in Ahead, to show places."}
                     </div>
-                    <ul className="legend">
-                      {Object.entries(GAP_PALETTE).map(([v, color]) => (
-                        <li key={v}>
-                          <Swatch color={color} />
-                          {GAP_LABELS[v]} (strip)
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  </details>
                 )}
               </div>
             </div>
             <div className="bottom">
-              <Profile
+              <Track
                 profile={bundle.profile}
                 range={range}
                 label={section ? `Section ${section.number}: ${section.title}` : "Whole route"}
                 stats={stats ? { ascent: stats.ascent_m, descent: stats.descent_m, maxGrade: stats.max_grade_500m } : null}
+                rows={stripRows}
+                active={layer}
+                marker={aheadActive ? aheadM : null}
+                onPick={(key) => {
+                  if (key.startsWith("gap:")) {
+                    const s = key.slice(4);
+                    for (const f of MAP_FILTERS) if (f.service === s) setShown((prev) => new Set(prev).add(f.key));
+                  } else setLayer(key as LayerKey);
+                }}
+                onPickM={services ? setAhead : undefined}
               />
-              {audited && (
-                <Strip
-                  rows={stripRows}
-                  range={range}
-                  active={layer}
-                  marker={tab === "ahead" ? aheadM : null}
-                  onPick={(key) => {
-                    if (key.startsWith("gap:")) {
-                      const s = key.slice(4);
-                      if (s !== "bail_out") setShown((prev) => new Set(prev).add(s));
-                    } else setLayer(key as LayerKey);
-                  }}
-                  onPickM={services ? setAhead : undefined}
-                />
-              )}
             </div>
           </>
         ) : (

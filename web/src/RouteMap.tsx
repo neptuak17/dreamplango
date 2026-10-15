@@ -53,6 +53,8 @@ interface Props {
   onClickEmpty: () => void;
   onSelectFinding: (id: string) => void;
   onSelectPlace: (id: string | null) => void;
+  /** Reported after every zoom change (used to thin places). */
+  onZoom?: (zoom: number) => void;
 }
 
 function placesGeoJSON(places: Place[]) {
@@ -282,6 +284,9 @@ export function RouteMap(props: Props) {
         else if (hit.layer.id === "findings") latest.current.onSelectFinding(String(hit.properties.id));
         else latest.current.onClickRoute(Number((hit.properties as RideProps).section), [e.lngLat.lng, e.lngLat.lat]);
       });
+
+      m.on("zoomend", () => latest.current.onZoom?.(m.getZoom()));
+      latest.current.onZoom?.(m.getZoom());
 
       ready.current = true;
       const { selectedSection } = latest.current;
