@@ -1,6 +1,6 @@
 # DreamPlanGo — System Design (V1 proposal)
 
-**Status:** Living design, 2026-10-14. Decisions D1–D21 are recorded below, and milestones M0–M2 are built (section 11).
+**Status:** Living design, 2026-10-15. Decisions D1–D25 are recorded below, and milestones M0–M2 are built (section 11).
 **Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports).
 
 ---
@@ -50,6 +50,10 @@
 | D19 | 2026-10-14 | **Bundles stay file-based in M2.** They add `places.json` and `services.json`. The API loads the places file once per bundle and serves it through a filtered endpoint, so the browser never downloads all of it. SQLite still waits for the iOS offline packs. |
 | D20 | 2026-10-14 | **Public transport in M2 means stations plus a curated bike-carriage table, without timetables.** Stations (rail, plus ferry terminals) come from OSM. Whether bikes are carried comes from an in-repo table per country and operator, each row with its source and check date. ECS also requires 2 to 4 services a day, which needs GTFS feeds, so that part of the criterion is reported as not checked. |
 | D21 | 2026-10-14 | **The services criteria use the wording of the 2026 ECS short manual.** That means accommodation, food and water, and cycle repair on every daily section; toilets every 15 km; and bikes on public transport at least every 150 km (essential) or 75 km (important). "On a daily section" means a place within the D17 limits, located along that section. |
+| D22 | 2026-10-15 | **Routes enter through two kinds of adapter.** *Format readers* (GPX first, then FIT; later TCX, KML, GeoJSON) turn a file into one common shape: tracks or segments, waypoints, and file metadata. They must handle both planned routes (GPX `<rte>`, FIT courses) and recorded tracks (GPX `<trk>`, FIT activities). *Route sources* (EuroVelo, OSM route relations, national networks, user upload) add the meaning: how the route splits into sections, status, official links and licence. A source with no sections of its own is split into stages, by its tracks or days when it has them, otherwise into stages of about 60 km. EuroVelo-only rules (status findings, OSM EuroVelo-relation coverage) apply only to EuroVelo. The current EuroVelo adapter combines both roles and gets split when the second source arrives. See 8 (item 1) and 11.3. |
+| D23 | 2026-10-15 | **Places are a shared catalogue; their position along a route is computed per route.** Conflated places (OSM plus Overture, D16) are stored once by area (H3 cells), each version tied to its source snapshots. Any route, of any network or uploaded by a user, draws from that catalogue. Only the route-relative parts (position on the route, detour, whether it counts, gaps) are computed per route. Road layers follow the same idea: values derived from matched OSM ways are cached per way, so routes that share roads share results, and overlap with an audited route can be reported ("62% of this route follows EV8"). Later, routing tiles built per country or region, rather than per route corridor, let a new route be audited without a new tile build. See 11.3. |
+| D24 | 2026-10-15 | **POIs that come with a user's file stay private to that route.** Waypoints and FIT course points become *user places* (`source: user`), stored only with that route's audit. They are shown on the map and in the Ahead list with their own style, and may be linked to a matching public place to show its details; that link stays private too. They can optionally count towards that route's own gap figures. They never enter the shared catalogue, are never conflated into public places, and are never shown to anyone else. The pattern follows the private business layers in 8.6. |
+| D25 | 2026-10-15 | **Every audit is either public or private.** Network routes are public. A user's route and everything derived from it (bundle, user places, findings) is private: never listed by the API, never added to shared data, and in production returned to the device rather than kept (section 9). Shared data fetched for a private route is cached by coarse area (H3 cells), never by that route's corridor, and corridors are not logged, because a stored corridor would reveal the route. A user file's licence is treated as unknown, so it is never redistributed. On the laptop prototype, private bundles live apart from public ones and are marked as such in their manifest. |
 
 ---
 
@@ -212,7 +216,7 @@ Licence notes reflect my current understanding. Anything marked **verify** needs
 | **ECS manuals and certification reports** | Rule design; calibration ground truth | PDFs on eurovelo.com | Reference only |
 | **EuroVelo Data Hub** (ECF) | Network stats, development-status reports, usage barometer | pro.eurovelo.com | Reports; potential data partnership |
 | **OSM route relations** (`route=bicycle`, `network=icn/ncn/rcn`, `ref=EV6`) | Second geometry source; national and regional networks; data-quality comparison | OSM extracts | ODbL |
-| **User GPX** (later) | Any route | Upload | User's own data (see privacy, section 9) |
+| **User GPX / FIT** (later) | Any route, with its own waypoints or course points | Upload, read by format readers (D22) | User's own data, licence unknown: kept private and never redistributed (D24, D25; privacy, section 9) |
 | **USBRS / other networks** (later) | Other networks via adapters | e.g. AASHTO / Adventure Cycling data, OSM `network=ncn` in the US | Varies, **verify** |
 
 ### 5.2 Road and path network, base map, terrain
@@ -474,7 +478,7 @@ Live data is requested by *route block* (a fixed 50 km tile of a route), never b
 
 ## 8. How the flexibility is achieved
 
-1. **Network-agnostic core model.** Network → Route → RouteVersion → Component/Path. EuroVelo-specific knowledge (status legend, daily sections, ECS rules) lives in a *network adapter* and a *rules profile*. Adding USBRS means writing an adapter and a profile, not changing the core.
+1. **Network-agnostic core model.** Network → Route → RouteVersion → Component/Path. EuroVelo-specific knowledge (status legend, daily sections, ECS rules) lives in a *network adapter* and a *rules profile*. Adding USBRS means writing an adapter and a profile, not changing the core. Adapters come in two kinds (D22): *format readers* (GPX, FIT, …) parse files into one common shape, and *route sources* (EuroVelo, OSM relations, user upload, …) give that shape its sections, status and licence.
 2. **Linear-referenced event layers** are the universal "decoration" mechanism. Any dataset that can be located (points, lines, areas, time windows) becomes events on route km.
 3. **Plug-in registries** for five extension types:
 
@@ -515,7 +519,7 @@ The no-account path is feasible for the consumer app. Nothing in the Dream–Pla
 | Live weather, warnings, smoke, closures | Requests **by route block**, CDN-cached and shared; the server proxies third-party APIs so the user's IP never reaches them | IP transiently (request processing only; app-level logs exclude IPs) |
 | Rider profile, fitness, dates, stage plan | Stored and computed **on device** (planner runs locally) | None |
 | Background alerts ("storm warning on tomorrow's stage") | Option A: background refresh + **local notifications** (no server state). Option B: **Live Activity broadcast channels** (iOS 18+), one channel per route block; the server never sees device tokens. Option C (opt-in): APNs token + subscribed blocks + automatic expiry at trip end. | A/B: none. C: pseudonymous token, short-lived. |
-| Upload own GPX for audit (later) | Device trims a privacy zone at start and end (home address); processed in an ephemeral container; result returned; nothing retained (or cached only by content hash for a few hours) | Transient |
+| Upload own GPX or FIT for audit (later) | Device trims a privacy zone at start and end (home address); processed in an ephemeral container; result returned; nothing retained (or cached only by content hash for a few hours). The audit is private (D25): the file's own POIs stay with it as user places (D24), and shared data fetched for it is cached by coarse area, never by its corridor | Transient |
 | Anonymous issue reports ("path flooded at km 412") | Report carries the issue's location, not the rider's track; abuse control via **App Attest / DeviceCheck** (no identity) | Issue location + coarse time |
 | Crash diagnostics | Apple's built-in reports / MetricKit (user opts in at OS level); no third-party SDKs | None from us |
 
@@ -714,6 +718,31 @@ Each service gap is computed for each month, counting places whose month code is
   - a **"what's ahead from km X"** list: click the map or the strip to set X; it shows the next place of each type with its distance along the route and its detour;
   - places on the map;
   - services stats per section.
+
+### 11.3 Later: user routes and other networks (D22–D25)
+
+This belongs to the "user GPX audits" and "other networks" phases. It is not a milestone, and M3–M6 are unchanged. It records how those phases slot into what M0–M2 built.
+
+**Flow for a user's file:**
+
+```
+file (GPX / FIT / …)
+  └─ format reader ──► tracks + waypoints + metadata
+       └─ route source "user upload" ──► sections (its tracks or days, else ~60 km stages),
+                                          status unknown, licence unknown, visibility: private
+            └─ the same audit pipeline (matching, layers, terrain, services, rules)
+                 ├─ shared catalogue (public places, cached per-way road values) ──► read only
+                 └─ private outputs: route-relative placements, user places, findings ──► returned to the device
+```
+
+**What changes in the code when this phase starts:**
+- Split the EuroVelo adapter into a GPX format reader and a EuroVelo route source. Add a FIT reader (course points become user places).
+- The CLI and audit choose the route source by network, instead of assuming EuroVelo. EuroVelo-only findings are switched off for other sources.
+- Places move from per-route fetching to the shared catalogue by H3 cell. A route's placements, detours and gaps stay per route.
+- Bundle manifests gain `visibility`. The API lists only public bundles; private ones are stored apart.
+- Optional, when audits stop being one route at a time: routing tiles per country or region instead of per corridor.
+
+**Unchanged:** the measure axis, layers, rules profiles, services logic, bundle files and viewer. They already work on any measured route. The bike-carriage table needs rows for each new country.
 
 ---
 
