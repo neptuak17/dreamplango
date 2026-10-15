@@ -148,6 +148,8 @@ export function RouteMap(props: Props) {
   const map = useRef<MapLibreMap | null>(null);
   const popup = useRef<Popup | null>(null);
   const ready = useRef(false);
+  /** Set once the rider pans or zooms; until then the map keeps re-framing the route. */
+  const userMoved = useRef(false);
   const latest = useRef(props);
   latest.current = props;
 
@@ -169,8 +171,28 @@ export function RouteMap(props: Props) {
     const el = container.current;
     const collapse = () => el.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
     collapse();
-    m.once("load", collapse);
     map.current = m;
+
+    // Keep the route framed while the page settles (and when the window or panels resize), until the rider
+    // pans or zooms the map themselves.
+    userMoved.current = false;
+    const frame = () => {
+      if (userMoved.current) return;
+      const b = boundsOf(props.path, latest.current.selectedSection ?? undefined) ?? boundsOf(props.path);
+      if (b) m.fitBounds(b, { padding: 48, maxZoom: 12, animate: false });
+    };
+    m.on("movestart", (e) => {
+      if ((e as { originalEvent?: Event }).originalEvent) userMoved.current = true;
+    });
+    m.once("load", () => {
+      collapse();
+      frame();
+    });
+    const resizes = new ResizeObserver(() => {
+      m.resize();
+      frame();
+    });
+    resizes.observe(el);
     if (import.meta.env.DEV) (window as unknown as { __dpgMap?: MapLibreMap }).__dpgMap = m;
 
     // Add our layers as soon as the basemap style is parsed, without waiting for its tiles.
@@ -294,6 +316,7 @@ export function RouteMap(props: Props) {
     });
 
     return () => {
+      resizes.disconnect();
       ready.current = false;
       const open = popup.current;
       popup.current = null;
@@ -359,7 +382,10 @@ export function RouteMap(props: Props) {
     m.setFilter("route-selected", ["==", ["get", "section"], props.selectedSection ?? -1]);
     if (props.selectedSection !== null && props.selectedFinding === null) {
       const b = boundsOf(props.path, props.selectedSection);
-      if (b) m.fitBounds(b, { padding: 64, maxZoom: 12 });
+      if (b) {
+        userMoved.current = false; // a newly chosen section stays framed through later resizes
+        m.fitBounds(b, { padding: 64, maxZoom: 12 });
+      }
     }
   }, [props.selectedSection, props.selectedFinding, props.path]);
 

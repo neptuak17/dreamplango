@@ -5,7 +5,7 @@ import { km } from "./status";
 
 /** Width of the label column shared by the profile's height axis and the strip rows, so both plot on one km axis. */
 export const LABEL_W = 150;
-const PROFILE_H = 130;
+const PROFILE_H = 65;
 const AXIS_H = 18;
 const ROW_H = 12;
 const ROW_GAP = 3;
