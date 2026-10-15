@@ -297,6 +297,8 @@ select {
 
 .main {
   display: grid;
+  /* minmax(0, 1fr): long unwrapped text (e.g. the hover readout) must never widen the column, or the map resizes. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr auto;
   min-width: 0;
   min-height: 0;
@@ -431,6 +433,7 @@ select {
 }
 
 .bottom {
+  min-width: 0;
   background: var(--panel);
   border-top: 1px solid var(--line);
 }
@@ -438,6 +441,7 @@ select {
 /* --- profile + strips on one km axis ------------------------------------------------------------------------ */
 
 .track {
+  min-width: 0;
   padding: 8px 16px 10px;
 }
 

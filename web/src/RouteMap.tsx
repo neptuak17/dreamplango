@@ -188,11 +188,8 @@ export function RouteMap(props: Props) {
       collapse();
       frame();
     });
-    const resizes = new ResizeObserver(() => {
-      m.resize();
-      frame();
-    });
-    resizes.observe(el);
+    // MapLibre tracks its container's size itself; re-frame after it has resized.
+    m.on("resize", frame);
     if (import.meta.env.DEV) (window as unknown as { __dpgMap?: MapLibreMap }).__dpgMap = m;
 
     // Add our layers as soon as the basemap style is parsed, without waiting for its tiles.
@@ -316,7 +313,6 @@ export function RouteMap(props: Props) {
     });
 
     return () => {
-      resizes.disconnect();
       ready.current = false;
       const open = popup.current;
       popup.current = null;
