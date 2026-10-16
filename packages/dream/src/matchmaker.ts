@@ -83,21 +83,26 @@ export interface Climb {
   unknownM: number;
 }
 
-/** Climbing over consecutive sections in one direction, keeping what is known apart from what isn't (D37). */
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/**
+ * Climbing over consecutive sections in one direction, keeping what is known apart from what isn't (D37).
+ * A value that is missing (e.g. a bundle written before a field existed) counts as unknown, never as a number.
+ */
 export function climbOf(sections: DreamSection[], way: Way): Climb {
   let metres = 0;
   let known = false;
   let unknownM = 0;
   for (const s of sections) {
     const full = way === "forward" ? s.ascent_fwd_m : s.ascent_rev_m;
-    if (full !== null) {
+    if (isNum(full)) {
       metres += full;
       known = true;
       continue;
     }
-    unknownM += s.climb_unknown_m || s.length_m;
+    unknownM += isNum(s.climb_unknown_m) && s.climb_unknown_m > 0 ? s.climb_unknown_m : s.length_m;
     const part = way === "forward" ? s.ascent_known_fwd_m : s.ascent_known_rev_m;
-    if (part !== null) {
+    if (isNum(part)) {
       metres += part;
       known = true;
     }

@@ -156,6 +156,21 @@ describe("findStretches", () => {
     expect(ok.some((r) => r.first <= 3 && r.last >= 3)).toBe(false);
   });
 
+  it("never shows NaN when a bundle lacks the known-climbing fields", () => {
+    const old = ten.map((s) => {
+      if (s.number !== 3) return s;
+      const { ascent_known_fwd_m: _f, ascent_known_rev_m: _r, climb_unknown_m: _u, ...rest } = section(3, { ascent_fwd_m: null, ascent_rev_m: null });
+      return rest as DreamSection;
+    });
+    const across = findStretches(dream(old), { ...base, limit: 50 }).filter((r) => r.first <= 3 && r.last >= 3);
+    expect(across.length).toBeGreaterThan(0);
+    for (const r of across) {
+      expect(r.climbMinPerDay).toBe(Math.round(((r.last - r.first) * 300) / r.days));
+      expect(r.climbUnknownKm).toBe(50); // the whole section counts as unknown
+      expect(r.why.join(" ")).not.toContain("NaN");
+    }
+  });
+
   it("evaluates the reverse direction with the reverse climbing", () => {
     const hilly = ten.map((s) => section(s.number, { ascent_fwd_m: 1500, ascent_rev_m: 200 }));
     expect(findStretches(dream(hilly), { ...base, days: 4, direction: "forward" })).toHaveLength(0);
