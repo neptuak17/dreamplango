@@ -156,7 +156,11 @@ Places come from OSM and Overture release 2026-09-23.1. Overture contributes Met
 
 - **Themes and remoteness:**
   - The top sections are sensible: coast on the Costa del Sol (sections 5–9); wine in Catalonia and Languedoc (35, 43–47); mountains from Nice to Ventimiglia, over Velebit and on the Dalmatian coast (59, 89–90, 100, 102).
-  - Two sections are more than a quarter straight-line placeholder, so they have no data for mountains, climbing or steepest grade: 53, Manosque–Meyrargues (all 28 km), and 45, Leucate–Narbonne (12.5 of 38 km). Sampling the terrain along the straight line gave section 53 1,295 m of climbing, which says nothing about the real road.
+  - Two sections are more than a quarter straight-line placeholder, so their mountains theme is "no data" and their climbing is measured on real terrain only:
+    - 45, Leucate–Narbonne (12.5 of 38 km placeholder): at least 38 m of climbing, on the 25 km of real terrain.
+    - 53, Manosque–Meyrargues (placeholder throughout): climbing unknown. Sampling the terrain along the straight line had given 1,295 m, which says nothing about the real road.
+  - Stretches that include them show climbing and grade as minimums. For example, Cavaillon → Cuneo (sections 51–61) shows at least 4,305 m (unknown for 28.4 km) and grade at least 3.
+  - The M1 stats card still includes the terrain under placeholders (143 m for section 45, 1,295 m for section 53).
   - The most remote stretches are around Almería and Murcia: up to 44 km more than 5 km from a village (Cabo de Gata – Carboneras).
 
 - **Direction in October:** 108 of 152 sections are "either way"; 20 favour riding with the route and 24 against it.

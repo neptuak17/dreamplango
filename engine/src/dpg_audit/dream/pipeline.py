@@ -41,6 +41,7 @@ PATHS = {"cycleway", "shared_path", "separated_track"}
 NOT_KNOWN = {"unmatched", "unknown"}
 ACCOMMODATION_KIND = {"campsite": "campsite", "hostel": "hostel", "hut": "hostel"}
 GAP_SERVICES = ("water", "food", "accommodation", "bike_shop")
+KNOWN_CLIMB_MIN_M = 1000.0  # below this much real terrain, a section's climbing is simply unknown
 
 
 @dataclass
@@ -224,18 +225,33 @@ def build_dream(
         if all(v is None for v in cr.tourism_index):
             checks.append(f"Tourism by month in {country}: no data, so how busy it gets is your call.")
         placeholder = sum(min(b, d.to_m) - max(a, d.from_m) for a, b in untrusted if a < d.to_m and b > d.from_m)
-        # Terrain sampled under a straight line says nothing about the real road: unknown, not a guess (D37).
+        # Terrain sampled under a straight line says nothing about the real road: unknown, not a guess (D37). The rest
+        # of the section is still measured, and that climbing is a minimum.
         rough = placeholder > themes.PLACEHOLDER_UNKNOWN_SHARE * d.length_m
+        up, down, known_up, known_down = sc.ascent_m, sc.descent_m, None, None
+        unknown_m = 0.0 if up is not None else d.length_m
+        if rough:
+            up = down = None
+            unknown_m = placeholder
+            if d.length_m - placeholder >= KNOWN_CLIMB_MIN_M:
+                ku, kd = elevation.ascent_descent(profs, d.from_m, d.to_m, trusted_only=True)
+                known_up, known_down = round(ku), round(kd)
+            else:
+                unknown_m = d.length_m
         if placeholder > 0:
+            if not rough:
+                effect = "its distance and climbing are approximate."
+            elif known_up is not None:
+                effect = (
+                    "its distance is approximate, and its climbing is measured on the rest only, so it is a minimum."
+                )
+            else:
+                effect = "its distance is approximate and its climbing unknown."
             checks.append(
                 f"{placeholder / 1000:.1f} km of this section is a straight-line placeholder in the official track: "
-                + (
-                    "its distance is approximate and its climbing unknown."
-                    if rough
-                    else "its distance and climbing are approximate."
-                )
+                + effect
             )
-        up, down, steep = (None, None, None) if rough else (sc.ascent_m, sc.descent_m, sc.max_grade_500m)
+        steep = sc.max_grade_500m  # measured on real terrain only (M1)
 
         daylight = monthly_day_length(lat, year)
         peak = max((v for v in cr.tourism_index if v is not None), default=None)
@@ -272,9 +288,12 @@ def build_dream(
                 country=cc,
                 ascent_fwd_m=up,
                 ascent_rev_m=down,
+                ascent_known_fwd_m=known_up,
+                ascent_known_rev_m=known_down,
+                climb_unknown_m=round(unknown_m, 1),
                 max_grade_500m=steep,
-                grade_fwd=grade(profile.levels, km, up),
-                grade_rev=grade(profile.levels, km, down),
+                grade_fwd=grade(profile.levels, km, up if up is not None else known_up),
+                grade_rev=grade(profile.levels, km, down if down is not None else known_down),
                 surfaces=surface_shares(infra, surface, d.from_m, d.to_m),
                 busy_share=round(sc.shares.get("traffic_stress", {}).get("4", 0.0), 3),
                 themes=scenery[i].themes,

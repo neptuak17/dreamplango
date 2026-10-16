@@ -36,8 +36,15 @@ export interface StretchResult {
   km: number;
   days: number;
   kmPerDay: number;
+  /** Climbing per day; null when any of it is unknown. */
   climbPerDay: number | null;
+  /** When climbing is partly unknown: the known climbing per day, a minimum (D37). */
+  climbMinPerDay: number | null;
+  /** Km whose climbing is unknown (placeholder track). */
+  climbUnknownKm: number;
   grade: number;
+  /** The grade is a minimum, because climbing is partly unknown. */
+  gradeAtLeast: boolean;
   month: number | null;
   comfort: number | null;
   bestTime: number | null;
@@ -68,6 +75,34 @@ export function gradeFor(levels: RiderLevel[], kmPerDay: number, climbPerDay: nu
     if (kmPerDay <= lv.km_max && (climbPerDay === null || climbPerDay <= lv.climb_max_m)) return lv.level;
   }
   return levels[levels.length - 1]?.level ?? 5;
+}
+
+export interface Climb {
+  /** Total climbing; when `unknownM` > 0, only the known part, so a minimum. null when none is known. */
+  metres: number | null;
+  unknownM: number;
+}
+
+/** Climbing over consecutive sections in one direction, keeping what is known apart from what isn't (D37). */
+export function climbOf(sections: DreamSection[], way: Way): Climb {
+  let metres = 0;
+  let known = false;
+  let unknownM = 0;
+  for (const s of sections) {
+    const full = way === "forward" ? s.ascent_fwd_m : s.ascent_rev_m;
+    if (full !== null) {
+      metres += full;
+      known = true;
+      continue;
+    }
+    unknownM += s.climb_unknown_m || s.length_m;
+    const part = way === "forward" ? s.ascent_known_fwd_m : s.ascent_known_rev_m;
+    if (part !== null) {
+      metres += part;
+      known = true;
+    }
+  }
+  return { metres: known ? metres : null, unknownM };
 }
 
 function weighted(sections: DreamSection[], value: (s: DreamSection) => number | null | undefined): number | null {
@@ -130,9 +165,13 @@ function evaluate(dream: DreamFile, run: Run, way: Way, q: DreamQuery): StretchR
   const totalM = secs.reduce((a, s) => a + s.length_m, 0);
   const kmPerDay = totalM / 1000 / q.days;
   if (kmPerDay > level.km_max * (1 + TOLERANCE) || kmPerDay < level.km_min * (1 - 3 * TOLERANCE)) return null;
-  const climbs = secs.map((s) => (way === "forward" ? s.ascent_fwd_m : s.ascent_rev_m));
-  const climbPerDay = climbs.every((c) => c !== null) ? climbs.reduce<number>((a, c) => a + (c ?? 0), 0) / q.days : null;
-  if (climbPerDay !== null && climbPerDay > level.climb_max_m * (1 + 3 * TOLERANCE)) return null;
+  const climb = climbOf(secs, way);
+  const partly = climb.unknownM > 0;
+  // Known climbing per day: complete, or a minimum when part is unknown. A minimum already over the limit rules the
+  // run out as surely as a complete figure.
+  const climbKnown = climb.metres === null ? null : climb.metres / q.days;
+  if (climbKnown !== null && climbKnown > level.climb_max_m * (1 + 3 * TOLERANCE)) return null;
+  const climbPerDay = partly ? null : climbKnown;
 
   const first = secs[0]!;
   const last = secs[secs.length - 1]!;
@@ -157,13 +196,18 @@ function evaluate(dream: DreamFile, run: Run, way: Way, q: DreamQuery): StretchR
   const mid = (level.km_min + level.km_max) / 2;
   const half = (level.km_max - level.km_min) / 2 || 1;
   let fit = Math.max(0, 1 - Math.abs(kmPerDay - mid) / (half * 2));
-  if (climbPerDay !== null && climbPerDay > level.climb_max_m) fit *= 0.6;
+  if (climbKnown !== null && climbKnown > level.climb_max_m) fit *= 0.6;
   parts.push([WEIGHTS.fit, fit]);
-  const grade = gradeFor(dream.levels, kmPerDay, climbPerDay);
+  const grade = gradeFor(dream.levels, kmPerDay, climbKnown);
+  const climbText = climbKnown === null ? "" : ` and ${partly ? "at least " : ""}${Math.round(climbKnown)} m climbing/day`;
   why.push(
-    `${Math.round(kmPerDay)} km/day${climbPerDay !== null ? ` and ${Math.round(climbPerDay)} m climbing/day` : ""}: grade ${grade} (${dream.levels.find((l) => l.level === grade)?.name ?? ""})`,
+    `${Math.round(kmPerDay)} km/day${climbText}: grade ${partly ? "at least " : ""}${grade} (${dream.levels.find((l) => l.level === grade)?.name ?? ""})`,
   );
-  if (climbPerDay === null) check.add("Climbing is unknown on part of this stretch.");
+  if (partly) {
+    check.add(
+      `Climbing is unknown for ${(climb.unknownM / 1000).toFixed(1)} km of this stretch, so the climbing and grade shown are minimums: check the real road.`,
+    );
+  }
 
   // Surfaces (D36).
   let surf = surfaces.unknown * 0.5;
@@ -251,7 +295,10 @@ function evaluate(dream: DreamFile, run: Run, way: Way, q: DreamQuery): StretchR
     days: q.days,
     kmPerDay: Math.round(kmPerDay),
     climbPerDay: climbPerDay === null ? null : Math.round(climbPerDay),
+    climbMinPerDay: partly && climbKnown !== null ? Math.round(climbKnown) : null,
+    climbUnknownKm: Math.round(climb.unknownM / 100) / 10,
     grade,
+    gradeAtLeast: partly,
     month,
     comfort: comfort === null ? null : Math.round(comfort),
     bestTime: bestTime === null ? null : Math.round(bestTime),

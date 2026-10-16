@@ -20,6 +20,9 @@ function section(n: number, over: Partial<DreamSection> = {}): DreamSection {
     country: "XX",
     ascent_fwd_m: 300,
     ascent_rev_m: 300,
+    ascent_known_fwd_m: null,
+    ascent_known_rev_m: null,
+    climb_unknown_m: 0,
     max_grade_500m: 4,
     grade_fwd: 2,
     grade_rev: 2,
@@ -133,6 +136,24 @@ describe("findStretches", () => {
     const [coastOnly] = findStretches(dream(ten), { ...base, themes: ["coast"] });
     expect(top?.score).toBeCloseTo(coastOnly!.score, 6);
     expect(top?.check).toContain(`Vineyards & wine: no data for ${top?.km} km of this stretch: judge it yourself.`);
+  });
+
+  it("shows partly unknown climbing as a minimum, and rules runs out when even that is too much", () => {
+    const placeholder = { ascent_fwd_m: null, ascent_rev_m: null, ascent_known_fwd_m: 100, ascent_known_rev_m: 100, climb_unknown_m: 30_000 };
+    const partly = ten.map((s) => (s.number === 3 ? section(3, placeholder) : s));
+    const across = findStretches(dream(partly), { ...base, limit: 50 }).filter((r) => r.first <= 3 && r.last >= 3);
+    expect(across.length).toBeGreaterThan(0);
+    for (const r of across) {
+      expect(r.climbPerDay).toBeNull();
+      expect(r.climbMinPerDay).toBe(Math.round(((r.last - r.first) * 300 + 100) / r.days));
+      expect(r.gradeAtLeast).toBe(true);
+      expect(r.climbUnknownKm).toBe(30);
+      expect(r.check).toContain("Climbing is unknown for 30.0 km of this stretch, so the climbing and grade shown are minimums: check the real road.");
+    }
+    const steep = ten.map((s) => (s.number === 3 ? section(3, { ...placeholder, ascent_known_fwd_m: 9000 }) : s));
+    const ok = findStretches(dream(steep), { ...base, limit: 50 });
+    expect(ok.length).toBeGreaterThan(0);
+    expect(ok.some((r) => r.first <= 3 && r.last >= 3)).toBe(false);
   });
 
   it("evaluates the reverse direction with the reverse climbing", () => {

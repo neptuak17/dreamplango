@@ -4,6 +4,7 @@
  */
 import type { DailySection, DreamFile, DreamSection } from "@dpg/contracts";
 import {
+  climbOf,
   type DreamQuery,
   findStretches,
   mergeChecks,
@@ -157,8 +158,9 @@ function RealityCard({
     return len ? sum / len : null;
   };
   const m = month ?? result?.month ?? null;
-  const climbs = sections.map((s) => (way === "forward" ? s.ascent_fwd_m : s.ascent_rev_m));
-  const ascent = climbs.every((v) => v !== null) ? climbs.reduce<number>((a, v) => a + (v ?? 0), 0) : null;
+  // Climbing that is partly unknown (placeholder track) is shown as a minimum, never as the whole (D37).
+  const climb = climbOf(sections, way);
+  const partly = climb.unknownM > 0;
   const steeps = sections.flatMap((s) => (s.max_grade_500m === null ? [] : [s.max_grade_500m]));
   const steep = steeps.length ? Math.max(...steeps) : null;
   const surf = { road: w((s) => s.surfaces.road), cycle_path: w((s) => s.surfaces.cycle_path), gravel: w((s) => s.surfaces.gravel), unknown: w((s) => s.surfaces.unknown) };
@@ -188,17 +190,20 @@ function RealityCard({
         <b>{km(lengthM, 1)} km{result ? ` · ${result.days} days · ${result.kmPerDay} km/day` : ""}</b>
         <span>Climbing</span>
         <b>
-          {ascent === null ? "unknown" : `${Math.round(ascent).toLocaleString("en-GB")} m`}
-          {result?.climbPerDay != null ? ` · ${result.climbPerDay} m/day` : ""} · steepest 500 m {steep === null ? "unknown" : `${steep.toFixed(0)}%`}
+          {climb.metres === null ? "unknown" : `${partly ? "at least " : ""}${Math.round(climb.metres).toLocaleString("en-GB")} m`}
+          {partly && climb.metres !== null ? ` (unknown for ${km(climb.unknownM, 1)} km)` : ""}
+          {result?.climbPerDay != null ? ` · ${result.climbPerDay} m/day` : result?.climbMinPerDay != null ? ` · at least ${result.climbMinPerDay} m/day` : ""}
+          {" · steepest 500 m "}
+          {steep === null ? "unknown" : `${steep.toFixed(0)}%${partly ? " where the terrain is known" : ""}`}
         </b>
         <span>Grade</span>
         <b>
           {result
-            ? `${result.grade} ${dream.levels.find((l) => l.level === result.grade)?.name ?? ""}`
+            ? `${result.gradeAtLeast ? "at least " : ""}${result.grade} ${dream.levels.find((l) => l.level === result.grade)?.name ?? ""}`
             : single
-              ? `${single.grade_fwd ?? "–"} forward / ${single.grade_rev ?? "–"} reverse (as one day)`
+              ? `${partly ? "at least " : ""}${single.grade_fwd ?? "–"} forward / ${single.grade_rev ?? "–"} reverse (as one day)`
               : "–"}
-          {ascent === null ? " · from distance only: climbing unknown" : ""}
+          {partly ? (climb.metres === null ? " · from distance only: climbing unknown" : " · climbing partly unknown") : ""}
         </b>
         <span>Surfaces</span>
         <b>
@@ -413,7 +418,9 @@ export function Dream({
               <span className="stretch-title">{stretchName(byNumber, r.first, r.last, r.way)}</span>
               <span className="stretch-sub">
                 sections {r.first}–{r.last} · {r.km} km · {r.kmPerDay} km/day
-                {r.climbPerDay !== null ? ` · ↑ ${r.climbPerDay} m/day` : ""} · grade {r.grade}
+                {r.climbPerDay !== null ? ` · ↑ ${r.climbPerDay} m/day` : r.climbMinPerDay !== null ? ` · ↑ ≥ ${r.climbMinPerDay} m/day` : ""} · grade{" "}
+                {r.gradeAtLeast ? "≥ " : ""}
+                {r.grade}
                 {r.month !== null ? ` · ${MONTH_NAMES[r.month]} ${r.bestTime ?? "–"}` : ""}
               </span>
               {on && (

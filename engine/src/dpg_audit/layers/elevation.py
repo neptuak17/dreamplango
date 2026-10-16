@@ -182,17 +182,31 @@ def _extrema(ele: np.ndarray, threshold: float) -> list[int]:
     return pivots
 
 
-def ascent_descent(profs: list[PartProfile], m0: float, m1: float, threshold: float = 3.0) -> tuple[float, float]:
+def _runs(mask: np.ndarray) -> list[slice]:
+    """Contiguous runs of True in `mask`."""
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], mask.astype(np.int8), [0]))))
+    return [slice(int(a), int(b)) for a, b in zip(edges[::2], edges[1::2], strict=True)]
+
+
+def ascent_descent(
+    profs: list[PartProfile], m0: float, m1: float, threshold: float = 3.0, *, trusted_only: bool = False
+) -> tuple[float, float]:
+    """Climbing and descent in [m0, m1]. With `trusted_only`, placeholder samples are left out and each stretch of
+    real terrain is measured on its own, so nothing is counted across a placeholder: a minimum for the whole."""
     up = down = 0.0
     for p in profs:
         sel = (p.m >= m0) & (p.m <= m1) & ~np.isnan(p.ele)
-        e = p.ele[sel]
-        if e.size < 2:
-            continue
-        ext = _extrema(e, threshold)
-        d = np.diff(e[ext])
-        up += float(d[d > 0].sum())
-        down += float(-d[d < 0].sum())
+        pieces: list = [sel]
+        if trusted_only and p.trusted is not None:
+            pieces = _runs(sel & p.trusted)
+        for piece in pieces:
+            e = p.ele[piece]
+            if e.size < 2:
+                continue
+            ext = _extrema(e, threshold)
+            d = np.diff(e[ext])
+            up += float(d[d > 0].sum())
+            down += float(-d[d < 0].sum())
     return up, down
 
 

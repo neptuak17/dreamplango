@@ -470,10 +470,18 @@ class DreamSection(Model):
     to_m: float
     length_m: float
     country: str | None
-    ascent_fwd_m: float | None
+    ascent_fwd_m: float | None = Field(description="Climbing riding forward; null when any of it is unknown")
     ascent_rev_m: float | None
-    max_grade_500m: float | None
-    grade_fwd: int | None = Field(description="Rider level (D36) needed to ride the section as one day, forward")
+    ascent_known_fwd_m: float | None = Field(
+        description="When climbing is partly unknown: climbing on the part with real terrain, so a minimum (D37)"
+    )
+    ascent_known_rev_m: float | None
+    climb_unknown_m: float = Field(description="Length whose climbing is unknown (placeholder track); 0 when complete")
+    max_grade_500m: float | None = Field(description="Steepest 500 m, on real terrain only")
+    grade_fwd: int | None = Field(
+        description="Rider level (D36) needed to ride the section as one day, forward; a minimum when climbing is "
+        "partly unknown"
+    )
     grade_rev: int | None
     surfaces: dict[str, float] = Field(description="Share of road, cycle_path, gravel and unknown (D36)")
     busy_share: float = Field(description="Share on busy roads (LTS 4)")

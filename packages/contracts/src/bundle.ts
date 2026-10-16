@@ -574,11 +574,26 @@ export interface DreamSection {
   to_m: number;
   length_m: number;
   country: string | null;
+  /**
+   * Climbing riding forward; null when any of it is unknown
+   */
   ascent_fwd_m: number | null;
   ascent_rev_m: number | null;
+  /**
+   * When climbing is partly unknown: climbing on the part with real terrain, so a minimum (D37)
+   */
+  ascent_known_fwd_m: number | null;
+  ascent_known_rev_m: number | null;
+  /**
+   * Length whose climbing is unknown (placeholder track); 0 when complete
+   */
+  climb_unknown_m: number;
+  /**
+   * Steepest 500 m, on real terrain only
+   */
   max_grade_500m: number | null;
   /**
-   * Rider level (D36) needed to ride the section as one day, forward
+   * Rider level (D36) needed to ride the section as one day, forward; a minimum when climbing is partly unknown
    */
   grade_fwd: number | null;
   grade_rev: number | null;

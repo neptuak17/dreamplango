@@ -835,7 +835,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Climbing riding forward; null when any of it is unknown"
         },
         "ascent_rev_m": {
           "anyOf": [
@@ -847,7 +848,18 @@
             }
           ]
         },
-        "max_grade_500m": {
+        "ascent_known_fwd_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When climbing is partly unknown: climbing on the part with real terrain, so a minimum (D37)"
+        },
+        "ascent_known_rev_m": {
           "anyOf": [
             {
               "type": "number"
@@ -856,6 +868,21 @@
               "type": "null"
             }
           ]
+        },
+        "climb_unknown_m": {
+          "description": "Length whose climbing is unknown (placeholder track); 0 when complete",
+          "type": "number"
+        },
+        "max_grade_500m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Steepest 500 m, on real terrain only"
         },
         "grade_fwd": {
           "anyOf": [
@@ -866,7 +893,7 @@
               "type": "null"
             }
           ],
-          "description": "Rider level (D36) needed to ride the section as one day, forward"
+          "description": "Rider level (D36) needed to ride the section as one day, forward; a minimum when climbing is partly unknown"
         },
         "grade_rev": {
           "anyOf": [
@@ -1031,6 +1058,9 @@
         "country",
         "ascent_fwd_m",
         "ascent_rev_m",
+        "ascent_known_fwd_m",
+        "ascent_known_rev_m",
+        "climb_unknown_m",
         "max_grade_500m",
         "grade_fwd",
         "grade_rev",

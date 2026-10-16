@@ -28,6 +28,15 @@ def test_ascent_descent_on_ramp():
     assert down == pytest.approx(0, abs=3)
 
 
+def test_ascent_on_real_terrain_only():
+    profs = el.profiles(straight_path(), ramp_sampler, [])
+    el.mark_untrusted(profs, [(2500.0, 3500.0)])  # the middle of the ramp is placeholder geometry
+    up, _ = el.ascent_descent(profs, 0, 10_000, trusted_only=True)
+    # the 25 m on each side of the placeholder still counts; the 50 m under it doesn't, nor any step across it
+    assert up == pytest.approx(50, abs=5)
+    assert el.ascent_descent(profs, 0, 10_000)[0] == pytest.approx(100, abs=3)  # default unchanged
+
+
 def test_gradient_events_and_classes():
     profs = el.profiles(straight_path(), ramp_sampler, [])
     events = el.gradient_events(profs)
