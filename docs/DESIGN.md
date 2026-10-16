@@ -1,6 +1,6 @@
 # DreamPlanGo — System Design (V1 proposal)
 
-**Status:** Living design, 2026-10-16. Decisions D1–D36 are recorded below, and milestones M0–M2 are built (section 11).
+**Status:** Living design, 2026-10-16. Decisions D1–D37 are recorded below, and milestones M0–M2 are built (section 11).
 **Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports, white-label partner widgets).
 
 ---
@@ -73,6 +73,7 @@
 | D34 | 2026-10-16 (revised the same day) | **M3 climate uses ERA5 directly from Copernicus from the start, beginning small.** The climate download is then built once, with commercial rights from day one, instead of starting on Open-Meteo's free (non-commercial) API and migrating before payments.<ul><li>**Defaults:** 10 years (2016–2025); one climate point every ~100 km of route, with each daily section using its nearest point; daily summaries only (temperature max/min, precipitation, wind speed and prevailing direction).</li><li>**Access:** the CDS API (`cdsapi`), with the owner's free Copernicus account, the ERA5 dataset licences accepted, and the key in `~/.cdsapirc` in Ubuntu. Requests queue on Copernicus's side and run unattended, resumable and cached.</li><li>**Point time series first:** the "ERA5 hourly time-series data on single levels" dataset (March 2025) is built for long single-point series. ECMWF labels it experimental, and API errors have been reported.</li><li>**Fallback:** gridded ERA5 or ERA5-Land downloads over the route's area, with our points extracted locally (a few GB, more processing).</li><li>**Settings, not code:** the years, point spacing and source are configured behind an adapter. Moving to 30-year normals, or adding Open-Meteo or another source, is a configuration change.</li><li>**Scope:** the comfort score and best-time heatmap are only one input to deciding when to go, so they stay simple.</li></ul>Attribution: Copernicus Climate Change Service (C3S), ERA5. |
 | D35 | 2026-10-16 | **The Dream phase (agreed with the owner).** Dream answers *which stretch suits me, when, and which way*, before a rider commits. It ends with a choice (route stretch, time window, direction) that Plan turns into days.<ul><li>**Start:** EV8's daily sections. Evaluating a rider's own route (D22–D25) is the likely next step.</li><li>**What a result is:** consecutive daily sections on one route. A search across all routes that match the rider's wishes is a future feature.</li><li>**Rider inputs:** a self-chosen fitness level (D36), surface preferences, scenery themes, month and number of days, and a few practical needs. No fitness data.</li><li>**Free, as a teaser for the Trip Pass:** Dream shows summaries, scores and counts. The detail behind them (places, the findings list, the Ahead list, GPX, Plan and Go) is unlocked by the pass (D32).</li><li>**Scenery themes are included.** Photos and descriptions are out of scope for now; they could come later, from partners or licensed sources (D27).</li><li>Search runs on the rider's device in the app (D30).</li></ul> |
 | D36 | 2026-10-16 | **Rider fitness uses five self-chosen levels, and route stretches are graded on the same scale.** The levels use the language of cycling-holiday grades (Exodus, Skedaddle, KE Adventure, Headwater, Much Better Adventures). Each is defined by what the rider is comfortable riding **per day with luggage**:<ul><li>1 Leisurely: 20–40 km, up to ~300 m of climbing</li><li>2 Easy–moderate: 40–60 km, up to ~500 m</li><li>3 Moderate: 50–80 km, up to ~850 m</li><li>4 Challenging: 70–100 km, up to ~1,200 m</li><li>5 Tough: 90–130 km, 1,500 m and more</li></ul>The bands are a blend of those operators' published figures, not any one company's, and are starting points to tune. **Surfaces:** the rider marks each of *road*, *cycle paths* and *gravel* as prefer, OK or avoid. Every kilometre falls into exactly one of the three, from the infrastructure and surface layers (11.4). |
+| D37 | 2026-10-16 | **Missing data is shown as unknown and becomes the rider's call** (principle 1, applied to Dream and onwards). Where we have no data (school holidays or tourism figures for some countries, opening seasons, anything else), we say so. The gap becomes a "check yourself" item for the rider to judge or follow up.<ul><li>**No gap-filling:** no curated guesses, no estimates extrapolated from other places, no assumed typical values.</li><li>**Scores:** a score whose input is missing leaves that part out and shows that it is missing; it never assumes a neutral value.</li><li>**Facts are reported for the known part only,** e.g. "4 of 37 campsites here publish a season; 3 are open in October".</li><li>**Sourced facts are fine:** curated tables that cite a source (e.g. bike carriage, D20) are allowed. Invented or "typical" values are not.</li></ul> |
 
 ---
 
@@ -794,8 +795,8 @@ Concept D35, rider levels D36, climate source D34. Everything is computed in the
 | 1 | **Climate** × month | Mean daily max and min temperature; rain days (≥ 1 mm) and mean rain; heat days (max ≥ 32 °C); windy days (daily mean ≥ 8 m/s) | ERA5 via the CDS API (D34): 10 years (2016–2025), one point every ~100 km, hourly series reduced to daily values locally | Each section uses its nearest point. Point time series first; gridded ERA5 or ERA5-Land as fallback. A small test request at the start checks the key and licences. |
 | 2 | **Wind along the route** × month | Mean along-route wind component in each direction of travel, and the share of days with a headwind above 3 m/s | ERA5 daily mean wind (u, v) projected onto the route's heading, km by km | This feeds direction advice. |
 | 3 | **Daylight** × month | Day length and civil twilight on the 15th of the month at the section's midpoint | Astronomical calculation (NOAA formulae, in code) | Clock times wait for Plan and Go. |
-| 4 | **Holidays and crowding** × month | Share of days in school holidays; number of public holidays; relative tourism intensity (the month's tourist nights against the national monthly average) | OpenHolidays API (ES, FR, MC, IT, SI, HR, AL). A small curated, sourced table for BA, ME, GR, TR, CY, which it doesn't cover. Eurostat monthly nights at tourist accommodation (`tour_occ_nim`) | National level for now. Regional detail would need NUTS boundaries, whose licence for commercial use must be checked first. "Unknown" wherever there's no data. |
-| 5 | **Seasons** × month | Expected share of campsites open; ferry-crossing operation | Campsites: that country's campsites that do publish a season (OSM, M2) give the share open each month. It is applied to the unknown ones as a labelled *estimate*, only where at least 15 publish one. Ferries: OSM ferry `opening_hours`/`seasonal`, plus notes in the route file | This is the M2 seasons gap. The estimate is always marked as an estimate, never as fact. |
+| 4 | **Holidays and crowding** × month | Share of days in school holidays; number of public holidays; relative tourism intensity (the month's tourist nights against the national monthly average) | OpenHolidays API (ES, FR, MC, IT, SI, HR, AL). Eurostat monthly nights at tourist accommodation (`tour_occ_nim`), where Eurostat publishes it | National level for now. **Countries without data (BA, ME, GR, TR and CY for holidays; any country Eurostat doesn't cover) show "no data", and the rider is told to check (D37).** Regional detail would need NUTS boundaries, whose licence for commercial use must be checked first. |
+| 5 | **Seasons** × month | Campsites: how many publish a season, and how many of those are open (or partly open) that month; ferry-crossing operation where published | OSM `opening_hours`/`seasonal` (M2) for campsites and ferries; notes in the route file only where they cite a source | **The known part only (D37):** "4 of 37 campsites publish a season; 3 are open in October; check the rest ahead". Nothing is assumed about the others. |
 | 6 | **Scenery themes** | A 0–1 score and a plain description per theme (below) | OSM (corridor extract) and the terrain profile | Scores are ranked within the network, so "high coast" means coastal compared with EV8's other sections. |
 | 7 | **Remoteness** | Longest stretch more than 10 km from a village or larger; share of km more than 5 km from one | OSM `place=*` (corridor extract) | Combined with M2's services gaps on the reality-check card. Population grids (GHSL) and mobile coverage come later. |
 | 8 | **Grade** (D36) | Level 1–5 for riding the section as one day, in each direction (km and climbing); steepest 500 m | Section length, M1 ascent and descent | The same grades are computed for whole stretches in the matchmaker. |
@@ -824,7 +825,9 @@ Concept D35, rider levels D36, climate source D34. Everything is computed in the
 
 minus a penalty for heat days. Labelled *excellent*, *good*, *fair* or *poor*.
 
-**Best time**, per section × month: 70% comfort, 20% services open (the campsite estimate and ferry operation), 10% quietness (inverse tourism intensity and school holidays). Each part can also be shown on its own.
+**Best time**, per section × month: 70% comfort, 20% services open (published seasons only), 10% quietness (inverse tourism intensity and school holidays). Each part can also be shown on its own.
+
+**Missing inputs (D37):** when a part has no data, it is left out and the remaining weights are rescaled. The score carries a "partial" marker naming what's missing, e.g. "no holiday data for Greece". Heatmap cells with partial scores are marked, and an all-unknown component shows as "no data", never as an average.
 
 **Direction advice**, per section or stretch × month: the along-route wind in each direction, plus the difference in climbing between directions. If both are small, the advice is "either way"; otherwise "ride westbound (tailwind ~2 m/s, 400 m less climbing)".
 
@@ -852,14 +855,15 @@ All weights and thresholds live in a YAML profile (`engine/profiles/dream-v0.yam
 - start and end, km, days, km/day, climbing/day, grade and best direction;
 - comfort for the month;
 - surface mix and theme highlights;
-- *why it matches* and *watch out for*: busy-road km, unpaved km, longest services and bail-out gaps, and seasonal unknowns.
+- *why it matches* and *watch out for*: busy-road km, unpaved km, longest services and bail-out gaps;
+- *check yourself* (D37): every gap behind the result, e.g. "school holidays in Montenegro: no data, check before booking" or "33 of 37 campsites publish no season, check opening dates". Runs aren't ranked down for missing data; the rider judges it.
 
 #### Outputs and access
 
 - **Bundle file `dream.json`:** the per-section summaries above, plus 12 monthly values for each measure, about 0.2–0.5 MB for EV8. This is the "catalogue" from 7.2 for one route, and it is small enough to download and search on the device.
 - **API:** `GET /v1/routes/{network}/{ref}/dream`, served as a static file and cached.
 - **Free and paid (D35):** `dream.json` holds only summaries and counts. It is public and free. Everything else in the bundle is what a Trip Pass unlocks. The prototype shows everything, as now.
-- **Manifest:** ERA5 (C3S), OpenHolidays, Eurostat and the curated holiday table are added as sources, with their attributions.
+- **Manifest:** ERA5 (C3S), OpenHolidays and Eurostat are added as sources, with their attributions.
 
 #### Prototype viewer
 
@@ -868,13 +872,13 @@ All weights and thresholds live in a YAML profile (`engine/profiles/dream-v0.yam
   - the **matchmaker** form and results above it.
 
   Clicking a heatmap cell selects that section and month, and the month carries through to the places filters.
-- **A reality-check card** for the selected section or matchmaker result: the M1 and M2 figures plus grade, comfort, direction, themes and data confidence.
+- **A reality-check card** for the selected section or matchmaker result: the M1 and M2 figures plus grade, comfort, direction, themes and data confidence. It ends with a **"check yourself"** list of every data gap behind it (D37).
 - **The map** highlights the selected stretch. An optional strip row shows comfort for the chosen month.
 
 #### Build order and checks
 
 1. Check the Copernicus key with a small ERA5 request. Write the climate adapter (time series, then the grid fallback), fetch EV8's ~75 points, and compute the monthly normals. Unit tests use small synthetic series.
-2. Daylight, holidays (OpenHolidays plus the curated table), and Eurostat monthly tourism.
+2. Daylight, holidays (OpenHolidays; "no data" elsewhere), and Eurostat monthly tourism.
 3. Scenery themes and remoteness from the OSM corridor; grades and surface shares from M1.
 4. Comfort, best-time and direction scores; write `dream.json`; regenerate the contracts.
 5. Viewer: the Dream tab, heatmap, matchmaker and reality-check card.
@@ -888,7 +892,8 @@ All weights and thresholds live in a YAML profile (`engine/profiles/dream-v0.yam
 - 10 years of data at ~100 km spacing on ERA5's ~28 km grid, which smooths coastal and mountain contrasts. ERA5-Land or more points fix this later by configuration.
 - Daily values only, and a heuristic comfort score.
 - Crowding at country level only.
-- Campsite seasons are estimates where few publish one.
+- Campsite seasons are known only where they are published (often a small minority); the rest is a "check yourself" item (D37).
+- Holidays and tourism intensity are missing for some countries (BA, ME, GR, TR and CY for holidays), so they show "no data" (D37).
 - Scenery depends on how well OSM is mapped locally.
 - No photos or descriptions (D35).
 
