@@ -1,6 +1,6 @@
 # DreamPlanGo — System Design (V1 proposal)
 
-**Status:** Living design, 2026-10-15. Decisions D1–D30 are recorded below, and milestones M0–M2 are built (section 11).
+**Status:** Living design, 2026-10-16. Decisions D1–D32 are recorded below, and milestones M0–M2 are built (section 11).
 **Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports, white-label partner widgets).
 
 ---
@@ -67,6 +67,8 @@
 | D28 | 2026-10-15 | **The next network after EuroVelo is not chosen yet.** The likely factors are how complete the network is and how many active users it has. Adding it means a route-source adapter and a rules profile for its standards (D22, 8.5). |
 | D29 | 2026-10-15 | **White-label means a widget or hosted page that a partner embeds on its own site.** Most partners are small, so it has to be simple to adopt. It covers the Dream and Plan phases only, for now. It reads the partner's public route data from our API, and planning runs in the visitor's browser; nothing about the visitor is stored. The partner sees route-level counts at most, never who viewed what or where they are. Partner staff may have business logins to manage their routes and branding (9.4). A later tie-in, to be discussed: plan on the partner's site, then buy the on-the-road companion as a Trip Pass in the DreamPlanGo app. |
 | D30 | 2026-10-15 | **No accounts and privacy-first for as long as possible,** for riders in the app and for visitors to partner sites. If a feature appears to need rider accounts, work stops so it can be discussed with the owner before any design. The mechanisms in section 9 come first. |
+| D31 | 2026-10-16 | **Hosting stays host-neutral and starts on free tiers** (supersedes the all-Cloudflare plan in section 10; options compared in 10.3).<ul><li>**Serving:** Cloudflare's free tier, i.e. static hosting for the viewer and the white-label widget, a Workers API, and R2 storage (10 GB free, no egress fees).</li><li>**Audits:** on the laptop, or in GitHub Actions (free arm64 runners for this public repository) if the runner disk proves big enough. Bundles are uploaded to R2.</li><li>**Places in production:** served as static files, one per 50 km route block, instead of one large file read by the API, because serverless functions have tight memory and CPU limits per request. This matches how live data is already requested (by block).</li><li>**Later, scheduled cloud audits:** the Cloudflare Workers Paid plan ($5/month) with Containers, or Azure Container Apps jobs within their free monthly allowance. The owner has no Microsoft subscription benefits, so Azure credits don't apply.</li><li>**Later, on-demand routing for user routes:** a small always-on Arm VM at an EU host (e.g. Hetzner, about €8–16/month in 2026), paid for by personal Trip Passes (D32). Always-on Containers are avoided (D4).</li></ul>V1 hosting cost: about $0/month. |
+| D32 | 2026-10-16 | **Trip Passes come in tiers.** A *network route pass* (e.g. a EuroVelo route) unlocks the precomputed audit and the on-the-road features for that route; its price is not set yet. A *personal route pass* audits one route the rider uploads (D22–D25), including the on-demand routing it needs, for a small price per route, about $2–5. Per-transaction payment fees weigh heavily at that price, so the price, or packs of several personal routes, are set with those fees in mind. |
 
 ---
 
@@ -323,7 +325,7 @@ Only one item costs money, and it is optional. Everything else is free or free w
 | **Open-Meteo** forecasts and air quality | Free tier. Their pricing page says to use it for evaluation and prototyping. Limit: 10,000 calls a day. | $0 now. A paid plan is needed before launch, because an app with paid passes counts as commercial. |
 | **Climate history** | Use ERA5 from Copernicus CDS, not Open-Meteo's historical API, which needs its Professional tier for commercial use | $0 (free account) |
 | **Free accounts or keys to register** | Copernicus CDS and ADS, NASA FIRMS, Mapillary | $0 |
-| **Cloudflare Workers Paid** | Only if deploying during the prototype. Tunnel + Access are free for sharing from the laptop. | $5/month |
+| **Cloudflare Workers Paid** | Not needed for V1: serving runs on the free tier and audits run on the laptop or in GitHub Actions (D31). Needed only once scheduled audits move into Containers. Tunnel + Access are free for sharing from the laptop. | $0 now; $5/month later |
 | **Apple Developer Program** | Already held (D6); unlocks WeatherKit now | $0 extra |
 | **Commercial traffic volumes** (TomTom/HERE) | Deferred to B2B; first test whether the traffic-stress estimate from OSM tags holds up on EV8's on-road stretches | Sales-led pricing |
 
@@ -559,21 +561,25 @@ On the App Store, Apple's definition of "collected" excludes data processed only
 
 ---
 
-## 10. Migration path: laptop → Cloudflare
+## 10. Migration path: laptop → hosted
 
-| Concern | V1 (laptop) | Cloudflare |
+Hosting is host-neutral and starts on free tiers (D31). The API is Hono, which runs unchanged on Node, Workers and most serverless hosts. The engine is a Docker image, and bundles are plain files.
+
+| Concern | V1 (laptop) | Hosted (D31) |
 |---|---|---|
-| Audit engine | `npm run ingest:…` (native in M0; Docker in WSL2 from M1) | **Cloudflare Containers** (GA Apr 2026), triggered by **Workflows** / **Queues** / **Cron Triggers** |
-| Bundles and raw data | `./data` | **R2** (no egress fees, good for offline-pack downloads) |
-| Query store | `audit.sqlite` per bundle | **D1** (import per route; 10 GB per database is plenty) |
-| API | Hono on Node | Hono on **Workers** (same code, different entry file) |
+| Audit engine | `npm run audit:…` in WSL2 (Docker for Valhalla) | Laptop, or **GitHub Actions** (free arm64 runners, public repo), uploading bundles to R2. Later, scheduled in the cloud: **Cloudflare Containers** (Workers Paid, $5/month) or **Azure Container Apps jobs** (free monthly allowance) |
+| Bundles and raw data | `~/dpg-data` | **R2** (10 GB free, no egress fees, good for offline-pack downloads) |
+| Places and other large per-route data | `places.json`, read once by the API | **Static files per 50 km route block** in R2, served from the CDN. D1/SQLite only if a query really needs it |
+| API | Hono on Node | Hono on **Workers** (same code, different entry file); free tier |
 | Live-data cache | In-memory/disk LRU | **Cache API** + **KV** |
-| Scheduled refresh (warnings polling, OSM change monitor) | cron in WSL | **Cron Triggers** → Workers / Containers |
-| Prototype web app | Vite dev server | Workers static assets |
-| Valhalla (routing/matching) | Docker | A Container may struggle with large tile sets on ephemeral disk. A small always-on VM is a pragmatic alternative. **Evaluate in V1.** |
-| Secrets | `.env` | Workers secrets |
+| Scheduled refresh (warnings polling, OSM change monitor) | cron in WSL | **Cron Triggers** → Workers, or a scheduled GitHub Actions workflow |
+| Prototype web app and white-label widget | Vite dev server | Static assets on Workers or Pages, free |
+| Valhalla (routing/matching) | Docker | Batch: wherever the audit runs. On-demand user routes (later): a **small always-on Arm VM at an EU host** (e.g. Hetzner), paid for by personal Trip Passes (D32) |
+| Secrets | `.env` | Workers secrets / GitHub Actions secrets |
 
 ### 10.1 Estimated Cloudflare cost
+
+With D31, V1 runs on free tiers, so about $0/month. The figures below apply once scheduled audits move into Cloudflare Containers. M2 timings on the laptop show audits are lighter than first estimated. An EV8 re-audit with cached matching and places takes about 2.5 minutes, and the first run with services about 12 minutes (matching already cached). A fresh monthly run is estimated at 15–25 minutes (not measured), and up to about an hour on a 4-vCPU instance.
 
 Rates are Cloudflare's published Containers and R2 pricing, checked 2026-10-14, in USD. Containers require the **Workers Paid plan ($5/month)**.
 
@@ -616,6 +622,20 @@ The audit durations below are estimates, to be replaced with measured numbers fr
 
 - **Instances are capped at 12 GiB memory and 20 GB disk, and disk is ephemeral.** All persistent state lives in R2. The engine processes one country at a time, streaming the inputs from R2. Whole-Europe OSM work (a ~30 GB extract) is not possible in a single container.
 - **Valhalla tiles must fit within instance disk.** For EV8, corridor-clipped tiles for all its countries should fit well under 20 GB. For the whole network, shard by region: one container instance per region, each addressed through its own Durable Object.
+
+### 10.3 Hosting options compared (checked 2026-10-16)
+
+Prices and free tiers change often; re-check before committing.
+
+| Option | What it offers | Use in DreamPlanGo | Cost |
+|---|---|---|---|
+| **Cloudflare free plan** | Workers, static assets, R2 10 GB free with no egress fees | Serving: viewer, widget, API, bundles (D31) | $0 |
+| **Cloudflare Workers Paid + Containers** | Batch containers with included monthly usage | Scheduled cloud audits, later | $5/month plus usage (10.1) |
+| **GitHub Actions** | Free arm64 runners with 4 vCPUs for public repositories, 6-hour job limit | Monthly audits, if the runner disk fits OSM downloads plus Valhalla tiles (to verify). Logs are public, which is fine: no personal data | $0 |
+| **Azure Container Apps** | 180,000 vCPU-s and 360,000 GiB-s free each month | Alternative for scheduled audits: a monthly EV8 audit fits | $0 within the allowance |
+| **Azure free account / Visual Studio credits** | ~$200 credit for 30 days plus 12 months of selected free services; monthly credits for Visual Studio subscribers | The owner has no qualifying subscription, so the credits don't apply | — |
+| **Oracle Cloud Always Free** | Free Arm VMs, reportedly cut to 2 OCPU / 12 GB in June 2026; idle instances can be reclaimed | Hobby use only; not dependable for production | $0 |
+| **Hetzner Cloud** (EU) | Arm VMs, e.g. 4 vCPU / 8 GB at about €8/month after two 2026 price rises; low-cost lines have been reported out of stock | On-demand routing for user routes, later (D31) | ~€8–16/month |
 
 ---
 
