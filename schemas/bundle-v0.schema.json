@@ -1836,7 +1836,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Climbing; a minimum when climb_unknown_m > 0 (unknown terrain is left out, D37)"
         },
         "descent_m": {
           "anyOf": [
@@ -1847,6 +1848,10 @@
               "type": "null"
             }
           ]
+        },
+        "climb_unknown_m": {
+          "description": "Length whose terrain is unknown (long straight-line placeholders); 0 when climbing is complete",
+          "type": "number"
         },
         "max_grade_500m": {
           "anyOf": [
@@ -1892,6 +1897,7 @@
         "to_m",
         "ascent_m",
         "descent_m",
+        "climb_unknown_m",
         "max_grade_500m",
         "shares",
         "criteria",
@@ -2313,7 +2319,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Climbing; a minimum when climb_unknown_m > 0 (unknown terrain is left out, D37)"
         },
         "descent_m": {
           "anyOf": [
@@ -2324,6 +2331,10 @@
               "type": "null"
             }
           ]
+        },
+        "climb_unknown_m": {
+          "description": "Length whose terrain is unknown (long straight-line placeholders); 0 when climbing is complete",
+          "type": "number"
         },
         "max_grade_500m": {
           "anyOf": [
@@ -2366,6 +2377,7 @@
         "to_m",
         "ascent_m",
         "descent_m",
+        "climb_unknown_m",
         "max_grade_500m",
         "shares",
         "criteria",

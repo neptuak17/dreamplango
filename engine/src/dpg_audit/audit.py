@@ -89,6 +89,7 @@ def run(
     # The terrain under a straight-line placeholder says nothing about the real road.
     untrusted = [(f.from_m, f.to_m) for f in build.findings if f.rule_id == "source.straight_segment"]
     elevation.mark_untrusted(profs, untrusted)
+    unknown = elevation.unknown_terrain([(d.from_m, d.to_m) for d in build.daily], untrusted)
     grad = elevation.gradient_events(profs, untrusted)
     climbs = elevation.climbs(profs, untrusted=untrusted)
     t["terrain"] = time.perf_counter() - t0 - sum(t.values())
@@ -117,8 +118,8 @@ def run(
     scores = ScoresFile(
         rules_profile=rules.id,
         criteria=rules.criterion_info(),
-        route=stretch_stats(0.0, build.path.length, events, minor, rules, profs),
-        sections=section_scores(build.daily, events, minor, rules, profs),
+        route=stretch_stats(0.0, build.path.length, events, minor, rules, profs, unknown),
+        sections=section_scores(build.daily, events, minor, rules, profs, unknown),
         climbs=climbs,
     )
     kept = [f.model_dump() for f in build.findings if f.rule_id != "source.gap_between_sections"]

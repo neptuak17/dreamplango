@@ -1,7 +1,7 @@
 import type { ProfileFile } from "@dpg/contracts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Stretch } from "./layers";
-import { km } from "./status";
+import { climbText, km, unknownNote } from "./status";
 
 /** Width of the label column shared by the profile's height axis and the strip rows, so both plot on one km axis. */
 export const LABEL_W = 150;
@@ -28,7 +28,8 @@ interface Props {
   profile: ProfileFile;
   range: [number, number];
   label: string;
-  stats?: { ascent: number | null; descent: number | null; maxGrade: number | null } | null;
+  /** `unknownM` > 0: climbing leaves out unknown terrain (long straight-line placeholders) and is a minimum. */
+  stats?: { ascent: number | null; descent: number | null; unknownM: number; maxGrade: number | null } | null;
   rows: StripRow[];
   active: string | null;
   onPick: (key: string) => void;
@@ -204,7 +205,8 @@ export function Track({ profile, range, label, stats, rows, active, onPick, onPi
         {view && (
           <span>
             {Math.round(view.min)}–{Math.round(view.max)} m
-            {stats?.ascent != null && ` · ↑ ${stats.ascent.toLocaleString("en-GB")} m ↓ ${stats.descent?.toLocaleString("en-GB")} m`}
+            {stats && ` · ↑ ${climbText(stats.ascent, stats.unknownM)} ↓ ${climbText(stats.descent, stats.unknownM)}`}
+            {stats ? unknownNote(stats.ascent, stats.unknownM) : ""}
             {stats?.maxGrade != null && ` · steepest 500 m ${stats.maxGrade}%`}
           </span>
         )}

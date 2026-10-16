@@ -196,10 +196,6 @@ def _p90(values: list[float]) -> float:
     return float(np.percentile(values, 90)) if values else 0.0
 
 
-# Above this share of straight-line placeholder, a section's terrain is unknown (D37), not approximate.
-PLACEHOLDER_UNKNOWN_SHARE = 0.25
-
-
 def _untrusted_share(profs: list[elevation.PartProfile], m0: float, m1: float) -> float:
     """Share of terrain samples in [m0, m1] lying on placeholder geometry (straight-line track)."""
     total = bad = 0
@@ -303,7 +299,7 @@ def scenery(
         climb = elevation.ascent_descent(profs, d.from_m, d.to_m)
         per_km = (climb[0] + climb[1]) / 2 / max(d.length_m / 1000, 0.1)
         peaks = count("peak")
-        if _untrusted_share(profs, d.from_m, d.to_m) > PLACEHOLDER_UNKNOWN_SHARE:
+        if _untrusted_share(profs, d.from_m, d.to_m) > elevation.PLACEHOLDER_UNKNOWN_SHARE:
             # Terrain under a straight-line placeholder says nothing about the real road (D37: unknown, not a guess).
             raw["mountains"].append(None)
             notes["mountains"].append(

@@ -182,31 +182,53 @@ def _extrema(ele: np.ndarray, threshold: float) -> list[int]:
     return pivots
 
 
-def _runs(mask: np.ndarray) -> list[slice]:
-    """Contiguous runs of True in `mask`."""
-    edges = np.flatnonzero(np.diff(np.concatenate(([0], mask.astype(np.int8), [0]))))
-    return [slice(int(a), int(b)) for a, b in zip(edges[::2], edges[1::2], strict=True)]
+# Straight-line placeholders (D37). Above this share of a daily section, the terrain under them is unknown rather than
+# approximate: climbing leaves it out and becomes a minimum. Below KNOWN_CLIMB_MIN_M of real terrain, climbing is
+# simply unknown.
+PLACEHOLDER_UNKNOWN_SHARE = 0.25
+KNOWN_CLIMB_MIN_M = 1000.0
+
+
+def overlap(ranges: list[tuple[float, float]], m0: float, m1: float) -> float:
+    """Length of `ranges` inside [m0, m1]."""
+    return sum(max(0.0, min(b, m1) - max(a, m0)) for a, b in ranges)
+
+
+def unknown_terrain(
+    sections: list[tuple[float, float]], placeholders: list[tuple[float, float]]
+) -> list[tuple[float, float]]:
+    """The placeholder pieces whose terrain is unknown: those in sections more than PLACEHOLDER_UNKNOWN_SHARE
+    placeholder. Shorter placeholders stay in the figures, which are then approximate."""
+    out = []
+    for s0, s1 in sections:
+        if overlap(placeholders, s0, s1) > PLACEHOLDER_UNKNOWN_SHARE * (s1 - s0):
+            out += [(max(a, s0), min(b, s1)) for a, b in placeholders if a < s1 and b > s0]
+    return out
 
 
 def ascent_descent(
-    profs: list[PartProfile], m0: float, m1: float, threshold: float = 3.0, *, trusted_only: bool = False
+    profs: list[PartProfile],
+    m0: float,
+    m1: float,
+    threshold: float = 3.0,
+    *,
+    exclude: list[tuple[float, float]] | None = None,
 ) -> tuple[float, float]:
-    """Climbing and descent in [m0, m1]. With `trusted_only`, placeholder samples are left out and each stretch of
-    real terrain is measured on its own, so nothing is counted across a placeholder: a minimum for the whole."""
+    """Climbing and descent in [m0, m1]. Samples inside `exclude` (unknown terrain) are left out and the rest joined,
+    so only the net change across a gap counts: the real road has to make that change too, so the result is a
+    minimum, never a guess."""
     up = down = 0.0
     for p in profs:
         sel = (p.m >= m0) & (p.m <= m1) & ~np.isnan(p.ele)
-        pieces: list = [sel]
-        if trusted_only and p.trusted is not None:
-            pieces = _runs(sel & p.trusted)
-        for piece in pieces:
-            e = p.ele[piece]
-            if e.size < 2:
-                continue
-            ext = _extrema(e, threshold)
-            d = np.diff(e[ext])
-            up += float(d[d > 0].sum())
-            down += float(-d[d < 0].sum())
+        for a, b in exclude or []:
+            sel &= ~((p.m >= a) & (p.m <= b))
+        e = p.ele[sel]
+        if e.size < 2:
+            continue
+        ext = _extrema(e, threshold)
+        d = np.diff(e[ext])
+        up += float(d[d > 0].sum())
+        down += float(-d[d < 0].sum())
     return up, down
 
 

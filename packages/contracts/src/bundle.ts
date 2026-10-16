@@ -308,8 +308,15 @@ export interface ScoresFile {
 export interface StretchStats {
   from_m: number;
   to_m: number;
+  /**
+   * Climbing; a minimum when climb_unknown_m > 0 (unknown terrain is left out, D37)
+   */
   ascent_m: number | null;
   descent_m: number | null;
+  /**
+   * Length whose terrain is unknown (long straight-line placeholders); 0 when climbing is complete
+   */
+  climb_unknown_m: number;
   /**
    * Steepest 500 m average gradient (%) in travel direction
    */
@@ -342,8 +349,15 @@ export interface CriterionShare {
 export interface SectionScores {
   from_m: number;
   to_m: number;
+  /**
+   * Climbing; a minimum when climb_unknown_m > 0 (unknown terrain is left out, D37)
+   */
   ascent_m: number | null;
   descent_m: number | null;
+  /**
+   * Length whose terrain is unknown (long straight-line placeholders); 0 when climbing is complete
+   */
+  climb_unknown_m: number;
   /**
    * Steepest 500 m average gradient (%) in travel direction
    */

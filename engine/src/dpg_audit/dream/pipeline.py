@@ -41,7 +41,6 @@ PATHS = {"cycleway", "shared_path", "separated_track"}
 NOT_KNOWN = {"unmatched", "unknown"}
 ACCOMMODATION_KIND = {"campsite": "campsite", "hostel": "hostel", "hut": "hostel"}
 GAP_SERVICES = ("water", "food", "accommodation", "bike_shop")
-KNOWN_CLIMB_MIN_M = 1000.0  # below this much real terrain, a section's climbing is simply unknown
 
 
 @dataclass
@@ -225,19 +224,13 @@ def build_dream(
         if all(v is None for v in cr.tourism_index):
             checks.append(f"Tourism by month in {country}: no data, so how busy it gets is your call.")
         placeholder = sum(min(b, d.to_m) - max(a, d.from_m) for a, b in untrusted if a < d.to_m and b > d.from_m)
-        # Terrain sampled under a straight line says nothing about the real road: unknown, not a guess (D37). The rest
-        # of the section is still measured, and that climbing is a minimum.
-        rough = placeholder > themes.PLACEHOLDER_UNKNOWN_SHARE * d.length_m
+        # M1 leaves out terrain under long placeholders (D37): its climbing is then a minimum, kept apart here so it is
+        # never read as the whole. Nothing is recomputed, so Dream and the audit always agree.
+        rough = sc.climb_unknown_m > 0
         up, down, known_up, known_down = sc.ascent_m, sc.descent_m, None, None
-        unknown_m = 0.0 if up is not None else d.length_m
+        unknown_m = sc.climb_unknown_m
         if rough:
-            up = down = None
-            unknown_m = placeholder
-            if d.length_m - placeholder >= KNOWN_CLIMB_MIN_M:
-                ku, kd = elevation.ascent_descent(profs, d.from_m, d.to_m, trusted_only=True)
-                known_up, known_down = round(ku), round(kd)
-            else:
-                unknown_m = d.length_m
+            up, down, known_up, known_down = None, None, sc.ascent_m, sc.descent_m
         if placeholder > 0:
             if not rough:
                 effect = "its distance and climbing are approximate."

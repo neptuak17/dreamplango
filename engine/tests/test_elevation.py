@@ -28,13 +28,28 @@ def test_ascent_descent_on_ramp():
     assert down == pytest.approx(0, abs=3)
 
 
-def test_ascent_on_real_terrain_only():
-    profs = el.profiles(straight_path(), ramp_sampler, [])
-    el.mark_untrusted(profs, [(2500.0, 3500.0)])  # the middle of the ramp is placeholder geometry
-    up, _ = el.ascent_descent(profs, 0, 10_000, trusted_only=True)
-    # the 25 m on each side of the placeholder still counts; the 50 m under it doesn't, nor any step across it
-    assert up == pytest.approx(50, abs=5)
-    assert el.ascent_descent(profs, 0, 10_000)[0] == pytest.approx(100, abs=3)  # default unchanged
+def hill_sampler(lon, lat):
+    """The ramp, plus a 150 m hill between 6 and 8 km: what a straight line drawn over a ridge would sample."""
+    m = (np.asarray(lon) - 5.0) * 78_850
+    return ramp_sampler(lon, lat) + np.clip(150 - np.abs(m - 7000) * 0.15, 0, None)
+
+
+def test_ascent_leaves_out_unknown_terrain_but_keeps_the_net_change():
+    profs = el.profiles(straight_path(), hill_sampler, [])
+    assert el.ascent_descent(profs, 0, 10_000)[0] == pytest.approx(250, abs=10)  # ramp + the (smoothed) ridge
+    up, down = el.ascent_descent(profs, 0, 10_000, exclude=[(5800.0, 8200.0)])  # the ridge is under a placeholder
+    assert up == pytest.approx(100, abs=3) and down == pytest.approx(0, abs=3)
+    # a placeholder in the middle of the ramp: the real road still has to make the 50 m under it
+    ramp = el.profiles(straight_path(), ramp_sampler, [])
+    assert el.ascent_descent(ramp, 0, 10_000, exclude=[(2500.0, 3500.0)])[0] == pytest.approx(100, abs=3)
+
+
+def test_unknown_terrain_only_in_sections_mostly_placeholder():
+    sections = [(0.0, 10_000.0), (10_000.0, 20_000.0)]
+    placeholders = [(1_000.0, 3_000.0), (12_000.0, 16_000.0), (19_500.0, 21_000.0)]
+    # 20% of the first section: approximate, kept. 55% of the second: unknown, clipped to the section.
+    assert el.unknown_terrain(sections, placeholders) == [(12_000.0, 16_000.0), (19_500.0, 20_000.0)]
+    assert el.overlap([(12_000.0, 16_000.0)], 0.0, 14_000.0) == 2_000.0
 
 
 def test_gradient_events_and_classes():

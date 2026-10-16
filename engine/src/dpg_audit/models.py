@@ -281,8 +281,13 @@ class StretchStats(Model):
 
     from_m: float
     to_m: float
-    ascent_m: float | None
+    ascent_m: float | None = Field(
+        description="Climbing; a minimum when climb_unknown_m > 0 (unknown terrain is left out, D37)"
+    )
     descent_m: float | None
+    climb_unknown_m: float = Field(
+        description="Length whose terrain is unknown (long straight-line placeholders); 0 when climbing is complete"
+    )
     max_grade_500m: float | None = Field(description="Steepest 500 m average gradient (%) in travel direction")
     shares: dict[str, dict[str, float]] = Field(description="Layer id -> value -> share of length (0-1)")
     criteria: dict[str, CriterionShare]

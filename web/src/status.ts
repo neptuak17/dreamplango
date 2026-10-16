@@ -23,3 +23,13 @@ export const SEVERITY: Record<Severity, { label: string; color: string; rank: nu
 
 export const km = (m: number, digits = 0) =>
   (m / 1000).toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+/** Climbing for display. Terrain under long straight-line placeholders is unknown, so the figure is then a minimum. */
+export function climbText(metres: number | null | undefined, unknownM: number | null | undefined): string {
+  if (metres == null) return "unknown";
+  return `${unknownM ? "≥ " : ""}${Math.round(metres).toLocaleString("en-GB")} m`;
+}
+
+/** "(unknown for N km)" beside a minimum; nothing when the figure is complete or wholly unknown. */
+export const unknownNote = (metres: number | null | undefined, unknownM: number | null | undefined) =>
+  metres != null && unknownM ? ` (unknown for ${km(unknownM, 1)} km)` : "";

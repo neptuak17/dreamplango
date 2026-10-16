@@ -114,7 +114,9 @@ def stretch_stats(
     minor: MinorFile,
     profile: RulesProfile,
     profs: list[elevation.PartProfile] | None,
+    unknown: list[tuple[float, float]] | None = None,
 ) -> StretchStats:
+    """`unknown`: path ranges whose terrain is unknown (long placeholders, see elevation.unknown_terrain)."""
     total = max(m1 - m0, 1e-9)
     shares: dict[str, dict[str, float]] = {}
     for layer in sorted({e.layer for e in events}):
@@ -142,15 +144,22 @@ def stretch_stats(
         for cid, v in sums.items()
     }
     ascent = descent = max_grade = None
+    unknown_m = elevation.overlap(unknown or [], m0, m1)
     if profs:
-        up, down = elevation.ascent_descent(profs, m0, m1)
-        ascent, descent = round(up), round(down)
+        if (m1 - m0) - unknown_m >= elevation.KNOWN_CLIMB_MIN_M:
+            up, down = elevation.ascent_descent(profs, m0, m1, exclude=unknown)
+            ascent, descent = round(up), round(down)
+        else:
+            unknown_m = m1 - m0  # too little real terrain to measure: unknown, not 0 (D37)
         max_grade = elevation.max_grade_window(profs, m0, m1)
+    else:
+        unknown_m = m1 - m0
     return StretchStats(
         from_m=round(m0, 1),
         to_m=round(m1, 1),
         ascent_m=ascent,
         descent_m=descent,
+        climb_unknown_m=round(unknown_m, 1),
         max_grade_500m=max_grade,
         shares=shares,
         criteria=criteria,
@@ -159,8 +168,10 @@ def stretch_stats(
     )
 
 
-def section_scores(daily, events, minor, profile, profs) -> list[SectionScores]:
+def section_scores(daily, events, minor, profile, profs, unknown=None) -> list[SectionScores]:
     return [
-        SectionScores(number=d.number, **stretch_stats(d.from_m, d.to_m, events, minor, profile, profs).model_dump())
+        SectionScores(
+            number=d.number, **stretch_stats(d.from_m, d.to_m, events, minor, profile, profs, unknown).model_dump()
+        )
         for d in daily
     ]

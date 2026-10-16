@@ -39,7 +39,7 @@ import {
   spacingFor,
   thin,
 } from "./services";
-import { DEVELOPMENT, km, SEVERITY, SIGNAGE } from "./status";
+import { climbText, DEVELOPMENT, km, SEVERITY, SIGNAGE, unknownNote } from "./status";
 import { Track, type StripRow } from "./Track";
 import { Dream } from "./Dream";
 import type { StretchResult } from "@dpg/dream";
@@ -154,9 +154,13 @@ function KpiBand({
           <Kpi value={pct(lts["4"])} label="busy roads" title="Busy roads: traffic stress (LTS) 4" />
           <Kpi value={pct((surf.gravel ?? 0) + (surf.dirt ?? 0))} label="unpaved" title="Loose gravel, dirt or sand" />
           <Kpi
-            value={stats.ascent_m != null ? `${stats.ascent_m.toLocaleString("en-GB")} m` : "–"}
+            value={climbText(stats.ascent_m, stats.climb_unknown_m)}
             label="climbing"
-            title="Total climbing from the smoothed terrain model"
+            title={
+              stats.climb_unknown_m
+                ? `Total climbing from the smoothed terrain model: a minimum, because the terrain under ${(stats.climb_unknown_m / 1000).toFixed(1)} km of straight-line placeholder is unknown`
+                : "Total climbing from the smoothed terrain model"
+            }
           />
         </div>
       )}
@@ -402,6 +406,23 @@ export function App() {
       ? [section.from_m, section.to_m]
       : [0, totalLength];
   const stats: StretchStats | null = section ? (scoresBySection.get(section.number) ?? null) : (bundle?.scores?.route ?? null);
+  // The profile header follows the Dream stretch when one is chosen: summed from its sections, unknowns kept apart.
+  const trackStats = (() => {
+    if (!dreamStretch?.length) {
+      return stats
+        ? { ascent: stats.ascent_m, descent: stats.descent_m, unknownM: stats.climb_unknown_m, maxGrade: stats.max_grade_500m }
+        : null;
+    }
+    const scs = dreamStretch.flatMap((d) => scoresBySection.get(d.number) ?? []);
+    const known = scs.filter((s) => s.ascent_m !== null);
+    const grades = scs.flatMap((s) => (s.max_grade_500m === null ? [] : [s.max_grade_500m]));
+    return {
+      ascent: known.length ? known.reduce((a, s) => a + (s.ascent_m ?? 0), 0) : null,
+      descent: known.length ? known.reduce((a, s) => a + (s.descent_m ?? 0), 0) : null,
+      unknownM: scs.reduce((a, s) => a + s.climb_unknown_m, 0),
+      maxGrade: grades.length ? Math.max(...grades) : null,
+    };
+  })();
   const legendShares = layer !== "status" ? shareOf(stretches[layer], range[0], range[1]) : {};
   const services = bundle?.services ?? null;
   const audited = Boolean(bundle?.events);
@@ -626,7 +647,8 @@ export function App() {
                         <span>{d.status.label}</span>
                         {sc && (
                           <span>
-                            ↑ {sc.ascent_m ?? "–"} m · busy {pct(sc.shares.traffic_stress?.["4"])} · unpaved{" "}
+                            ↑ {climbText(sc.ascent_m, sc.climb_unknown_m)}
+                            {unknownNote(sc.ascent_m, sc.climb_unknown_m)} · busy {pct(sc.shares.traffic_stress?.["4"])} · unpaved{" "}
                             {pct((sc.shares.surface?.gravel ?? 0) + (sc.shares.surface?.dirt ?? 0))} · important ✓{" "}
                             {pct(sc.important_pass)}
                           </span>
@@ -901,7 +923,7 @@ export function App() {
                       ? `Section ${section.number}: ${section.title}`
                       : "Whole route"
                 }
-                stats={stats ? { ascent: stats.ascent_m, descent: stats.descent_m, maxGrade: stats.max_grade_500m } : null}
+                stats={trackStats}
                 rows={stripRows}
                 active={layer}
                 marker={aheadActive ? aheadM : null}
