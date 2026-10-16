@@ -130,6 +130,41 @@ Places come from OSM and Overture release 2026-09-23.1. Overture contributes Met
   - 69 of 1,670 counted campsites publish a season. In October, 13 are closed and 6 close mid-month, for example "Apr 14 – Oct 15".
   - So the seasonal-gap rule finds nothing yet. That's a data gap, not evidence that everything is open; the viewer says so.
 
+## M3 Dream results (bundle 2026-10-16)
+
+- **Climate:** 73 ERA5 points (2016–2025), one every 100 km, so every section has climate data. The first fetch took about 20 minutes through the CDS queue. Re-runs read the cache, and the Dream step then takes about a minute. `dream.json` is 0.6 MB.
+
+- **Seasons look plausible** (averages over each country's sections):
+
+  | Country | Sections | July max | July heat days | October max | October rain days | December daylight | October comfort | Best month |
+  |---|---:|---:|---:|---:|---:|---:|---:|---|
+  | Spain | 42 | 28.5 °C | 13% | 22.5 °C | 23% | 9.5 h | 86 | May |
+  | France | 17 | 29.7 °C | 24% | 20.8 °C | 30% | 9.0 h | 81 | Sep |
+  | Italy | 23 | 28.8 °C | 18% | 18.7 °C | 32% | 8.8 h | 79 | Oct |
+  | Slovenia | 2 | 26.8 °C | 0% | 18.6 °C | 35% | 8.7 h | 76 | Jun |
+  | Croatia | 20 | 27.5 °C | 7% | 18.7 °C | 32% | 8.9 h | 77 | Jun |
+  | Montenegro | 7 | 28.6 °C | 13% | 19.5 °C | 33% | 9.1 h | 80 | Oct |
+  | Albania | 11 | 30.5 °C | 29% | 22.0 °C | 31% | 9.3 h | 82 | Oct |
+  | Greece | 15 | 31.0 °C | 37% | 22.2 °C | 26% | 9.5 h | 84 | Apr |
+  | Türkiye | 8 | 29.7 °C | 22% | 22.1 °C | 13% | 9.5 h | 88 | May |
+  | Cyprus | 7 | 31.2 °C | 34% | 25.9 °C | 12% | 9.8 h | 90 | Apr |
+
+
+- **Crowding:**
+  - August tourist nights are 1.7–3.5 times each country's monthly average (Croatia highest). In October they are below average everywhere except Spain, Türkiye and Cyprus.
+  - School holidays: 2027 calendars exist only for France; the other countries use 2026. June–September have no data because OpenHolidays leaves out summer breaks. Montenegro, Greece, Türkiye and Cyprus have no holiday data.
+
+- **Themes and remoteness:**
+  - The top sections are sensible: coast on the Costa del Sol (sections 5–9); wine in Catalonia and Languedoc (35, 43–47); mountains from Nice to Ventimiglia, over Velebit and on the Dalmatian coast (59, 89–90, 100, 102).
+  - Two sections are more than a quarter straight-line placeholder, so they have no data for mountains, climbing or steepest grade: 53, Manosque–Meyrargues (all 28 km), and 45, Leucate–Narbonne (12.5 of 38 km). Sampling the terrain along the straight line gave section 53 1,295 m of climbing, which says nothing about the real road.
+  - The most remote stretches are around Almería and Murcia: up to 44 km more than 5 km from a village (Cabo de Gata – Carboneras).
+
+- **Direction in October:** 108 of 152 sections are "either way"; 20 favour riding with the route and 24 against it.
+
+- **Hard breaks** that matchmaker runs can't cross: the 32 km missing link from Monfalcone to Muggia, the ferries from Athens to Türkiye and from Türkiye to Cyprus, and two short missing links in Cyprus.
+
+- **Acceptance case** ("7 days in October, Moderate, prefers cycle paths, coast and villages, train at both ends"): the top stretch is **Sagunt → Blanes** (sections 30–38). It is 462 km, at 66 km and 418 m of climbing a day, grade 3, with October comfort 82 and best time 84. Its "check yourself" list includes the places to stay that publish no opening season, and the summer school breaks missing from the data.
+
 ## Consequences for the engine
 
 - Treat the GPX as the reference itinerary, but never as precise geometry. M1 map-matches it to OSM, and replaces straight-line segments with the matched or routed line (flagged as such).

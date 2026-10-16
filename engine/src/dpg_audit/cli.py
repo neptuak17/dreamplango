@@ -126,6 +126,7 @@ def audit(
     rules: str = typer.Option("eurovelo-ecs-v0", help="Rules profile in engine/profiles/"),
     services: str = typer.Option("services-v0", help="Services profile in engine/profiles/"),
     overture_release: str = typer.Option(None, help="Overture release, e.g. 2026-09-23.1; default: latest"),
+    dream: str = typer.Option("dream-v0", help="Dream profile in engine/profiles/"),
 ) -> None:
     """Full audit: map matching, layers, gaps, terrain, services and access, ECS-style rules -> new bundle."""
     _check_network(network)
@@ -141,6 +142,7 @@ def audit(
         rules_name=rules,
         services_name=services,
         overture_release=overture_release,
+        dream_name=dream,
     )
     typer.echo("timings: " + ", ".join(f"{k} {v:.0f}s" for k, v in result.timings.items()))
     typer.echo(f"bundle {result.run_id} -> {result.out}")

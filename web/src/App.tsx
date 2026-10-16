@@ -41,8 +41,10 @@ import {
 } from "./services";
 import { DEVELOPMENT, km, SEVERITY, SIGNAGE } from "./status";
 import { Track, type StripRow } from "./Track";
+import { Dream } from "./Dream";
+import type { StretchResult } from "@dpg/dream";
 
-type Tab = "sections" | "findings" | "ahead";
+type Tab = "sections" | "findings" | "ahead" | "dream";
 type AuditLayer = Exclude<LayerKey, "status">;
 type Detour = "counting" | number;
 const AUDIT_LAYERS: AuditLayer[] = ["ecs", "infrastructure", "traffic_stress", "surface", "cycle_network", "gradient"];
@@ -215,6 +217,8 @@ export function App() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [placesInfo, setPlacesInfo] = useState<{ total: number; truncated: boolean } | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
+  // Dream (M3)
+  const [dreamResult, setDreamResult] = useState<StretchResult | null>(null);
 
   useEffect(() => {
     listRoutes()
@@ -388,7 +392,15 @@ export function App() {
   const section = daily.find((d) => d.number === selectedSection) ?? null;
   const summary = bundle?.manifest.summary;
   const totalLength = summary?.ride_length_m ?? 0;
-  const range: [number, number] = section ? [section.from_m, section.to_m] : [0, totalLength];
+  const dreamStretch =
+    tab === "dream" && dreamResult
+      ? daily.filter((d) => d.number >= dreamResult.first && d.number <= dreamResult.last)
+      : null;
+  const range: [number, number] = dreamStretch?.length
+    ? [dreamStretch[0]!.from_m, dreamStretch[dreamStretch.length - 1]!.to_m]
+    : section
+      ? [section.from_m, section.to_m]
+      : [0, totalLength];
   const stats: StretchStats | null = section ? (scoresBySection.get(section.number) ?? null) : (bundle?.scores?.route ?? null);
   const legendShares = layer !== "status" ? shareOf(stretches[layer], range[0], range[1]) : {};
   const services = bundle?.services ?? null;
@@ -430,7 +442,7 @@ export function App() {
       <aside className="sidebar">
         <header>
           <div className="header-top">
-            <div className="eyebrow">DreamPlanGo · audit viewer (M2)</div>
+            <div className="eyebrow">DreamPlanGo · audit viewer (M3)</div>
             <button
               className="collapse"
               onClick={() => setCollapsed((c) => !c)}
@@ -517,9 +529,14 @@ export function App() {
               Ahead
             </button>
           )}
+          {bundle?.dream && (
+            <button className={tab === "dream" ? "active" : ""} onClick={() => setTab("dream")}>
+              Dream
+            </button>
+          )}
         </nav>
 
-        {tab !== "ahead" && (
+        {tab !== "ahead" && tab !== "dream" && (
           <div className="filters">
             {(Object.keys(SEVERITY) as Severity[])
               .filter((s) => findings.some((f) => f.severity === s))
@@ -658,6 +675,21 @@ export function App() {
                 </span>
               </button>
             ))}
+          {bundle?.dream && tab === "dream" && (
+            <Dream
+              dream={bundle.dream}
+              daily={daily}
+              month={month}
+              onMonth={setMonth}
+              selectedSection={selectedSection}
+              onSelectSection={(n) => {
+                setDreamResult(null);
+                setSelectedSection(n);
+              }}
+              result={dreamResult}
+              onResult={setDreamResult}
+            />
+          )}
           {bundle && tab === "ahead" && aheadM === null && (
             <div className="muted pad">
               Click the route on the map, or the profile or strip under it, to set your position. The list shows the
@@ -724,6 +756,7 @@ export function App() {
                 marker={marker}
                 attribution={bundle.manifest.attribution}
                 selectedSection={selectedSection}
+                highlight={dreamStretch?.length ? dreamStretch.map((d) => d.number) : null}
                 selectedFinding={selectedFinding}
                 selectedPlace={selectedPlace}
                 onZoom={setZoom}
@@ -861,7 +894,13 @@ export function App() {
               <Track
                 profile={bundle.profile}
                 range={range}
-                label={section ? `Section ${section.number}: ${section.title}` : "Whole route"}
+                label={
+                  dreamStretch?.length
+                    ? `Sections ${dreamStretch[0]!.number}–${dreamStretch[dreamStretch.length - 1]!.number}`
+                    : section
+                      ? `Section ${section.number}: ${section.title}`
+                      : "Whole route"
+                }
                 stats={stats ? { ascent: stats.ascent_m, descent: stats.descent_m, maxGrade: stats.max_grade_500m } : null}
                 rows={stripRows}
                 active={layer}

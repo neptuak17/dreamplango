@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-BUNDLE_SCHEMA_VERSION = "0.3"
+BUNDLE_SCHEMA_VERSION = "0.4"
 
 LonLat = tuple[float, float]
 
@@ -393,6 +393,127 @@ class ServicesFile(Model):
     )
 
 
+MonthValues = list[float | None]
+"""12 values, January first; None where there is no data (D37)."""
+
+
+class RiderLevel(Model):
+    """D36: what a rider is comfortable riding per day, with luggage."""
+
+    level: int
+    name: str
+    km_min: float
+    km_max: float
+    climb_max_m: float
+
+
+class ThemeInfo(Model):
+    id: str
+    title: str
+    measures: str = Field(description="How the theme is measured, in plain words")
+
+
+class ThemeScore(Model):
+    score: float | None = Field(
+        description="0-1: the section's raw value against the route's 90th percentile; null when unknown (D37)"
+    )
+    note: str = Field(description="Plain-language facts behind the score")
+
+
+class ClimateMonths(Model):
+    """Monthly normals at the section's climate point (D34)."""
+
+    point: LonLat = Field(description="ERA5 grid point the values come from")
+    distance_m: float = Field(description="From the section midpoint to that point")
+    tmax_c: MonthValues
+    tmin_c: MonthValues
+    rain_days: MonthValues = Field(description="Share of days with at least the rain-day threshold")
+    rain_mm: MonthValues = Field(description="Mean rain per day, mm")
+    heat_days: MonthValues
+    windy_days: MonthValues
+    wind_along_ms: MonthValues = Field(description="Mean along-route wind riding forward (+ tailwind, - headwind)")
+    headwind_days_fwd: MonthValues
+    headwind_days_rev: MonthValues
+
+
+class Crowding(Model):
+    country: str | None
+    school_days: MonthValues = Field(
+        description="Share of the country's regions on school holiday, per month (June-September: no data, as the "
+        "source omits summer breaks)"
+    )
+    school_year: int | None = Field(description="Calendar year of the school-holiday dates used")
+    public_holidays: MonthValues = Field(description="Nationwide public holidays in the month")
+    public_year: int | None = Field(description="Calendar year of the public-holiday dates used")
+    tourism_index: MonthValues = Field(description="Tourist nights in the month / monthly average (1 = average)")
+    tourism_years: str | None
+
+
+class CampsiteSeasons(Model):
+    counted: int = Field(description="Campsites that count on this section (M2)")
+    published: int = Field(description="Of those, how many publish an opening season")
+    open: list[int] = Field(description="Per month: published campsites open all month")
+    partly: list[int] = Field(description="Per month: published campsites open part of the month")
+
+
+class Direction(Model):
+    advice: Literal["forward", "reverse", "either", "unknown"]
+    wind_along_ms: float | None
+    climb_diff_m: float | None = Field(
+        description="Reverse climbing minus forward climbing (positive favours forward); null when unknown"
+    )
+
+
+class DreamSection(Model):
+    number: int
+    from_m: float
+    to_m: float
+    length_m: float
+    country: str | None
+    ascent_fwd_m: float | None
+    ascent_rev_m: float | None
+    max_grade_500m: float | None
+    grade_fwd: int | None = Field(description="Rider level (D36) needed to ride the section as one day, forward")
+    grade_rev: int | None
+    surfaces: dict[str, float] = Field(description="Share of road, cycle_path, gravel and unknown (D36)")
+    busy_share: float = Field(description="Share on busy roads (LTS 4)")
+    themes: dict[str, ThemeScore]
+    remote_share: float = Field(description="Share of km further than the remoteness distance from a village")
+    longest_remote_m: float
+    climate: ClimateMonths | None
+    daylight_h: list[float]
+    crowding: Crowding
+    campsites: CampsiteSeasons
+    accommodation: dict[str, int] = Field(description="Counted places by kind: campsite, hostel, hotel")
+    services: dict[str, int] = Field(description="Counted places per service type (M2)")
+    longest_gap_m: dict[str, float] = Field(description="Worst-month longest gap inside the section, per service")
+    station_start: str | None = Field(description="A bike-carrying station near the section start (name)")
+    station_end: str | None
+    findings: dict[str, int] = Field(description="Findings overlapping the section, per severity")
+    comfort: MonthValues
+    best_time: MonthValues
+    partial: list[list[str]] = Field(description="Per month: which best-time inputs had no data (D37)")
+    direction: list[Direction]
+    check: list[str] = Field(description="Data gaps the rider should check themselves (D37)")
+
+
+class RouteBreak(Model):
+    after_section: int
+    type: str
+    straight_distance_m: float
+    hard: bool = Field(description="A stretch may not continue across this break")
+
+
+class DreamFile(Model):
+    profile: str
+    season_year: int
+    climate_source: str
+    levels: list[RiderLevel]
+    themes: list[ThemeInfo]
+    sections: list[DreamSection]
+    breaks: list[RouteBreak]
+
+
 class CurrentPointer(Model):
     run_id: str
     updated_at: datetime
@@ -410,4 +531,5 @@ class BundleContract(Model):
     scores: ScoresFile
     places: PlacesFile
     services: ServicesFile
+    dream: DreamFile
     current: CurrentPointer

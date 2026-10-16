@@ -3,7 +3,7 @@
     "BundleManifest": {
       "properties": {
         "schema_version": {
-          "default": "0.3",
+          "default": "0.4",
           "type": "string"
         },
         "run_id": {
@@ -63,6 +63,198 @@
       ],
       "type": "object",
       "title": "BundleManifest"
+    },
+    "CampsiteSeasons": {
+      "properties": {
+        "counted": {
+          "description": "Campsites that count on this section (M2)",
+          "type": "integer"
+        },
+        "published": {
+          "description": "Of those, how many publish an opening season",
+          "type": "integer"
+        },
+        "open": {
+          "description": "Per month: published campsites open all month",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "partly": {
+          "description": "Per month: published campsites open part of the month",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "counted",
+        "published",
+        "open",
+        "partly"
+      ],
+      "type": "object",
+      "title": "CampsiteSeasons"
+    },
+    "ClimateMonths": {
+      "description": "Monthly normals at the section's climate point (D34).",
+      "properties": {
+        "point": {
+          "description": "ERA5 grid point the values come from",
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "distance_m": {
+          "description": "From the section midpoint to that point",
+          "type": "number"
+        },
+        "tmax_c": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "tmin_c": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "rain_days": {
+          "description": "Share of days with at least the rain-day threshold",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "rain_mm": {
+          "description": "Mean rain per day, mm",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "heat_days": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "windy_days": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "wind_along_ms": {
+          "description": "Mean along-route wind riding forward (+ tailwind, - headwind)",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "headwind_days_fwd": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "headwind_days_rev": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "point",
+        "distance_m",
+        "tmax_c",
+        "tmin_c",
+        "rain_days",
+        "rain_mm",
+        "heat_days",
+        "windy_days",
+        "wind_along_ms",
+        "headwind_days_fwd",
+        "headwind_days_rev"
+      ],
+      "type": "object",
+      "title": "ClimateMonths"
     },
     "Climb": {
       "properties": {
@@ -300,6 +492,105 @@
       "type": "object",
       "title": "CriterionShare"
     },
+    "Crowding": {
+      "properties": {
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "school_days": {
+          "description": "Share of the country's regions on school holiday, per month (June-September: no data, as the source omits summer breaks)",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "school_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calendar year of the school-holiday dates used"
+        },
+        "public_holidays": {
+          "description": "Nationwide public holidays in the month",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "public_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calendar year of the public-holiday dates used"
+        },
+        "tourism_index": {
+          "description": "Tourist nights in the month / monthly average (1 = average)",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "tourism_years": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "country",
+        "school_days",
+        "school_year",
+        "public_holidays",
+        "public_year",
+        "tourism_index",
+        "tourism_years"
+      ],
+      "type": "object",
+      "title": "Crowding"
+    },
     "CurrentPointer": {
       "properties": {
         "run_id": {
@@ -422,6 +713,350 @@
       ],
       "type": "string",
       "title": "DevelopmentLevel"
+    },
+    "Direction": {
+      "properties": {
+        "advice": {
+          "enum": [
+            "forward",
+            "reverse",
+            "either",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "wind_along_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "climb_diff_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reverse climbing minus forward climbing (positive favours forward); null when unknown"
+        }
+      },
+      "required": [
+        "advice",
+        "wind_along_ms",
+        "climb_diff_m"
+      ],
+      "type": "object",
+      "title": "Direction"
+    },
+    "DreamFile": {
+      "properties": {
+        "profile": {
+          "type": "string"
+        },
+        "season_year": {
+          "type": "integer"
+        },
+        "climate_source": {
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/RiderLevel"
+          },
+          "type": "array"
+        },
+        "themes": {
+          "items": {
+            "$ref": "#/$defs/ThemeInfo"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/DreamSection"
+          },
+          "type": "array"
+        },
+        "breaks": {
+          "items": {
+            "$ref": "#/$defs/RouteBreak"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "profile",
+        "season_year",
+        "climate_source",
+        "levels",
+        "themes",
+        "sections",
+        "breaks"
+      ],
+      "type": "object",
+      "title": "DreamFile"
+    },
+    "DreamSection": {
+      "properties": {
+        "number": {
+          "type": "integer"
+        },
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "length_m": {
+          "type": "number"
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ascent_fwd_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ascent_rev_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_grade_500m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grade_fwd": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rider level (D36) needed to ride the section as one day, forward"
+        },
+        "grade_rev": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "surfaces": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Share of road, cycle_path, gravel and unknown (D36)",
+          "type": "object"
+        },
+        "busy_share": {
+          "description": "Share on busy roads (LTS 4)",
+          "type": "number"
+        },
+        "themes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ThemeScore"
+          },
+          "type": "object"
+        },
+        "remote_share": {
+          "description": "Share of km further than the remoteness distance from a village",
+          "type": "number"
+        },
+        "longest_remote_m": {
+          "type": "number"
+        },
+        "climate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClimateMonths"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "daylight_h": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "crowding": {
+          "$ref": "#/$defs/Crowding"
+        },
+        "campsites": {
+          "$ref": "#/$defs/CampsiteSeasons"
+        },
+        "accommodation": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Counted places by kind: campsite, hostel, hotel",
+          "type": "object"
+        },
+        "services": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Counted places per service type (M2)",
+          "type": "object"
+        },
+        "longest_gap_m": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Worst-month longest gap inside the section, per service",
+          "type": "object"
+        },
+        "station_start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A bike-carrying station near the section start (name)"
+        },
+        "station_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Findings overlapping the section, per severity",
+          "type": "object"
+        },
+        "comfort": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "best_time": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "partial": {
+          "description": "Per month: which best-time inputs had no data (D37)",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "direction": {
+          "items": {
+            "$ref": "#/$defs/Direction"
+          },
+          "type": "array"
+        },
+        "check": {
+          "description": "Data gaps the rider should check themselves (D37)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "from_m",
+        "to_m",
+        "length_m",
+        "country",
+        "ascent_fwd_m",
+        "ascent_rev_m",
+        "max_grade_500m",
+        "grade_fwd",
+        "grade_rev",
+        "surfaces",
+        "busy_share",
+        "themes",
+        "remote_share",
+        "longest_remote_m",
+        "climate",
+        "daylight_h",
+        "crowding",
+        "campsites",
+        "accommodation",
+        "services",
+        "longest_gap_m",
+        "station_start",
+        "station_end",
+        "findings",
+        "comfort",
+        "best_time",
+        "partial",
+        "direction",
+        "check"
+      ],
+      "type": "object",
+      "title": "DreamSection"
     },
     "EuroVeloStatus": {
       "properties": {
@@ -995,6 +1630,35 @@
       "type": "object",
       "title": "ProfileFile"
     },
+    "RiderLevel": {
+      "description": "D36: what a rider is comfortable riding per day, with luggage.",
+      "properties": {
+        "level": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "km_min": {
+          "type": "number"
+        },
+        "km_max": {
+          "type": "number"
+        },
+        "climb_max_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "level",
+        "name",
+        "km_min",
+        "km_max",
+        "climb_max_m"
+      ],
+      "type": "object",
+      "title": "RiderLevel"
+    },
     "Route": {
       "properties": {
         "id": {
@@ -1032,6 +1696,31 @@
       ],
       "type": "object",
       "title": "Route"
+    },
+    "RouteBreak": {
+      "properties": {
+        "after_section": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        },
+        "straight_distance_m": {
+          "type": "number"
+        },
+        "hard": {
+          "description": "A stretch may not continue across this break",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "after_section",
+        "type",
+        "straight_distance_m",
+        "hard"
+      ],
+      "type": "object",
+      "title": "RouteBreak"
     },
     "RouteSummary": {
       "properties": {
@@ -1655,6 +2344,52 @@
       ],
       "type": "object",
       "title": "StretchStats"
+    },
+    "ThemeInfo": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "measures": {
+          "description": "How the theme is measured, in plain words",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "measures"
+      ],
+      "type": "object",
+      "title": "ThemeInfo"
+    },
+    "ThemeScore": {
+      "properties": {
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "0-1: the section's raw value against the route's 90th percentile; null when unknown (D37)"
+        },
+        "note": {
+          "description": "Plain-language facts behind the score",
+          "type": "string"
+        }
+      },
+      "required": [
+        "score",
+        "note"
+      ],
+      "type": "object",
+      "title": "ThemeScore"
     }
   },
   "description": "Root type used only to export one JSON Schema containing every bundle file type.",
@@ -1686,6 +2421,9 @@
     "services": {
       "$ref": "#/$defs/ServicesFile"
     },
+    "dream": {
+      "$ref": "#/$defs/DreamFile"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointer"
     }
@@ -1700,6 +2438,7 @@
     "scores",
     "places",
     "services",
+    "dream",
     "current"
   ],
   "type": "object",

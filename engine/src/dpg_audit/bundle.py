@@ -4,7 +4,7 @@ Layout: <data>/bundles/<network>/<ref>/<run_id>/<files>
         <data>/bundles/<network>/<ref>/current.json
 
 A geometry-only bundle (`dpg ingest`) has manifest, path, sections, findings and profile. A full audit (`dpg audit`)
-adds events (layers), minor (1 km criteria), scores, places and services.
+adds events (layers), minor (1 km criteria), scores, places, services and dream (M3).
 """
 
 import hashlib
@@ -24,6 +24,7 @@ from dpg_audit.models import (
     BundleManifest,
     ComponentKind,
     CurrentPointer,
+    DreamFile,
     EventsFile,
     Finding,
     FindingsFile,
@@ -48,6 +49,7 @@ FILE_NAMES = {
     "scores": "scores.json",
     "places": "places.json",
     "services": "services.json",
+    "dream": "dream.json",
 }
 BLOCK_SIZE_M = 50_000.0
 MINOR_SIZE_M = 1_000.0
@@ -130,6 +132,7 @@ def write_bundle(
     scores: ScoresFile | None = None,
     places: PlacesFile | None = None,
     services: ServicesFile | None = None,
+    dream: DreamFile | None = None,
 ) -> tuple[str, Path]:
     created = datetime.now(UTC)
     digest = hashlib.sha256("|".join([__version__, pipeline, *sorted(s.sha256 for s in sources)]).encode()).hexdigest()[
@@ -158,6 +161,7 @@ def write_bundle(
         "scores": scores,
         "places": places,
         "services": services,
+        "dream": dream,
     }
     files = {"manifest": FILE_NAMES["manifest"]}
     for name, payload in payloads.items():

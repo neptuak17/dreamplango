@@ -17,6 +17,7 @@ export const BUNDLE_FILES = {
   scores: "scores.json",
   places: "places.json",
   services: "services.json",
+  dream: "dream.json",
 } as const;
 
 export type BundleFile = keyof typeof BUNDLE_FILES;

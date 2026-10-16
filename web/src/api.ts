@@ -1,6 +1,7 @@
 import type {
   BundleManifest,
   DevelopmentLevel,
+  DreamFile,
   EventsFile,
   FindingsFile,
   GapType,
@@ -68,6 +69,8 @@ export interface RouteBundle {
   scores: ScoresFile | null;
   /** Services summary (M2); absent in older bundles. */
   services: ServicesFile | null;
+  /** Dream data (M3); absent in older bundles. */
+  dream: DreamFile | null;
 }
 
 export interface PlacesResponse {
@@ -104,7 +107,7 @@ export const listRoutes = () => get<{ routes: RouteListing[] }>("/v1/routes").th
 
 export async function loadBundle(network: string, ref: string): Promise<RouteBundle> {
   const base = `/v1/routes/${network}/${ref.toLowerCase()}`;
-  const [manifest, path, sections, findings, profile, events, minor, scores, services] = await Promise.all([
+  const [manifest, path, sections, findings, profile, events, minor, scores, services, dream] = await Promise.all([
     get<BundleManifest>(base),
     get<PathCollection>(`${base}/path`),
     get<SectionsFile>(`${base}/sections`),
@@ -114,8 +117,9 @@ export async function loadBundle(network: string, ref: string): Promise<RouteBun
     getOptional<MinorFile>(`${base}/minor`),
     getOptional<ScoresFile>(`${base}/scores`),
     getOptional<ServicesFile>(`${base}/services`),
+    getOptional<DreamFile>(`${base}/dream`),
   ]);
-  return { manifest, path, sections, findings, profile, events, minor, scores, services };
+  return { manifest, path, sections, findings, profile, events, minor, scores, services, dream };
 }
 
 export async function loadPlaces(

@@ -1,5 +1,5 @@
-"""The audit: match the route to OSM, derive layers, classify gaps, add terrain (M1), add services and access (M2),
-apply rules."""
+"""The audit: match the route to OSM, derive layers, classify gaps, add terrain (M1), services and access (M2) and
+Dream data (M3), apply rules."""
 
 import json
 import time
@@ -12,6 +12,8 @@ from dpg_audit import __version__
 from dpg_audit.build import assemble
 from dpg_audit.bundle import PROFILE_STEP_M, write_bundle
 from dpg_audit.config import work_dir
+from dpg_audit.dream.pipeline import build_dream
+from dpg_audit.dream.profile import load_dream
 from dpg_audit.layers import classify, elevation
 from dpg_audit.layers.events import build_matched_layers
 from dpg_audit.layers.gaps import classify_gaps
@@ -28,7 +30,7 @@ from dpg_audit.services.pipeline import build_places, services_file
 from dpg_audit.services.profile import load_services
 from dpg_audit.sources import dem
 
-PIPELINE = "dpg-audit/m2-services"
+PIPELINE = "dpg-audit/m3-dream"
 
 
 @dataclass
@@ -53,6 +55,7 @@ def run(
     rules_name: str = "eurovelo-ecs-v0",
     services_name: str = "services-v0",
     overture_release: str | None = None,
+    dream_name: str = "dream-v0",
 ) -> AuditResult:
     t: dict[str, float] = {}
     t0 = time.perf_counter()
@@ -125,6 +128,24 @@ def run(
         + rule_findings(rules, build.path, events, climbs, build.daily, scores.sections, matches)
         + coverage.findings(services.coverage, build.path.locate)
     )
+    svc_file = services_file(services, build, svc_profile)
+
+    dream = build_dream(
+        root,
+        wd,
+        build,
+        profs,
+        events,
+        scores.sections,
+        services.places,
+        services.coverage,
+        svc_file,
+        findings,
+        load_dream(dream_name),
+        untrusted=untrusted,
+        log=_log,
+    )
+    t["dream"] = time.perf_counter() - t0 - sum(t.values())
 
     ms = np.concatenate([np.append(np.arange(p.from_m, p.to_m, PROFILE_STEP_M), p.to_m) for p in build.path.parts])
     dem_ele = elevation.at(profs, ms)
@@ -154,7 +175,7 @@ def run(
         licence=Licence(id="MIT", name="MIT License", url="https://github.com/valhalla/valhalla/blob/master/COPYING"),
         attribution="Map matching and routing by Valhalla (MIT)",
     )
-    sources = [snap, *osm_sources, *services.sources, dem.snapshot(root, len(tiles)), valhalla_source]
+    sources = [snap, *osm_sources, *services.sources, dem.snapshot(root, len(tiles)), *dream.sources, valhalla_source]
     run_id, out = write_bundle(
         build,
         sources,
@@ -166,7 +187,8 @@ def run(
         minor=minor,
         scores=scores,
         places=services.file,
-        services=services_file(services, build, svc_profile),
+        services=svc_file,
+        dream=dream.file,
     )
     t["rules+write"] = time.perf_counter() - t0 - sum(t.values())
     _log(

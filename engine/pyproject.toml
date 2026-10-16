@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "DreamPlanGo Route Audit Engine"
 requires-python = ">=3.12"
 dependencies = [
+    "cdsapi>=0.7.5",
     "duckdb>=1.1",
     "gpxpy>=1.6",
     "httpx>=0.27",

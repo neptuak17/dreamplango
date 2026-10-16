@@ -18,6 +18,7 @@ const CONTENT_TYPES: Record<BundleFile, string> = {
   scores: "application/json",
   places: "application/json",
   services: "application/json",
+  dream: "application/json",
 };
 
 export function createApp(store: BundleStore) {
@@ -70,7 +71,7 @@ export function createApp(store: BundleStore) {
   };
 
   app.get("/v1/routes/:network/:ref", serve("manifest"));
-  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores", "services"] as const) {
+  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores", "services", "dream"] as const) {
     app.get(`/v1/routes/:network/:ref/${file}`, serve(file));
   }
 

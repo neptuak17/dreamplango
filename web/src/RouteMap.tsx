@@ -46,6 +46,8 @@ interface Props {
   marker: [number, number] | null;
   attribution: string[];
   selectedSection: number | null;
+  /** Sections to highlight and frame instead (a Dream stretch). */
+  highlight?: number[] | null;
   selectedFinding: string | null;
   selectedPlace: string | null;
   /** A click on the route line: the section and the clicked point. */
@@ -116,12 +118,18 @@ function placePopup(p: Place, month: number | null): HTMLElement {
   return root;
 }
 
-function boundsOf(path: PathCollection, section?: number): LngLatBounds | null {
+/** The sections to frame and highlight: a Dream stretch, else the selected section, else none (whole route). */
+function focusOf(p: { highlight?: number[] | null; selectedSection: number | null }): number[] | undefined {
+  if (p.highlight?.length) return p.highlight;
+  return p.selectedSection !== null ? [p.selectedSection] : undefined;
+}
+
+function boundsOf(path: PathCollection, sections?: number[]): LngLatBounds | null {
   const bounds = new LngLatBounds();
   let any = false;
   for (const f of path.features) {
     if (f.properties.kind !== "ride") continue;
-    if (section !== undefined && f.properties.section !== section) continue;
+    if (sections !== undefined && !sections.includes(f.properties.section)) continue;
     for (const c of f.geometry.coordinates) {
       bounds.extend(c);
       any = true;
@@ -157,7 +165,7 @@ export function RouteMap(props: Props) {
   useEffect(() => {
     if (!container.current) return;
     // Open directly on the selected section (or the whole route) so no tiles are fetched for a throwaway view.
-    const initial = boundsOf(props.path, latest.current.selectedSection ?? undefined) ?? boundsOf(props.path);
+    const initial = boundsOf(props.path, focusOf(latest.current)) ?? boundsOf(props.path);
     const m = new MapLibreMap({
       container: container.current,
       style: BASEMAP,
@@ -178,7 +186,7 @@ export function RouteMap(props: Props) {
     userMoved.current = false;
     const frame = () => {
       if (userMoved.current) return;
-      const b = boundsOf(props.path, latest.current.selectedSection ?? undefined) ?? boundsOf(props.path);
+      const b = boundsOf(props.path, focusOf(latest.current)) ?? boundsOf(props.path);
       if (b) m.fitBounds(b, { padding: 48, maxZoom: 12, animate: false });
     };
     m.on("movestart", (e) => {
@@ -308,8 +316,8 @@ export function RouteMap(props: Props) {
       latest.current.onZoom?.(m.getZoom());
 
       ready.current = true;
-      const { selectedSection } = latest.current;
-      if (selectedSection !== null) m.setFilter("route-selected", ["==", ["get", "section"], selectedSection]);
+      const focus = focusOf(latest.current);
+      if (focus) m.setFilter("route-selected", ["in", ["get", "section"], ["literal", focus]]);
     });
 
     return () => {
@@ -375,15 +383,17 @@ export function RouteMap(props: Props) {
   useEffect(() => {
     const m = map.current;
     if (!m || !ready.current) return;
-    m.setFilter("route-selected", ["==", ["get", "section"], props.selectedSection ?? -1]);
-    if (props.selectedSection !== null && props.selectedFinding === null) {
-      const b = boundsOf(props.path, props.selectedSection);
+    const focus = focusOf(props);
+    m.setFilter("route-selected", ["in", ["get", "section"], ["literal", focus ?? []]]);
+    if (focus && props.selectedFinding === null) {
+      const b = boundsOf(props.path, focus);
       if (b) {
         userMoved.current = false; // a newly chosen section stays framed through later resizes
         m.fitBounds(b, { padding: 64, maxZoom: 12 });
       }
     }
-  }, [props.selectedSection, props.selectedFinding, props.path]);
+    // The highlight array is rebuilt on every render; its contents are what matter.
+  }, [props.selectedSection, props.highlight?.join(","), props.selectedFinding, props.path]);
 
   useEffect(() => {
     const m = map.current;

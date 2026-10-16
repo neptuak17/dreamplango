@@ -1,0 +1,59 @@
+# Dream data and scores, version 0 (DESIGN.md 11.4; decisions D34-D37).
+# Every number here is a placeholder to tune, except the rider levels, which follow D36.
+id: dream-v0
+title: Dream data and scores (v0)
+season_year: 2027
+
+climate:
+  source: era5-timeseries          # Copernicus CDS "reanalysis-era5-single-levels-timeseries" (D34)
+  years: [2016, 2025]              # first and last full year
+  point_spacing_m: 100000          # one climate point every ~100 km of route
+  workers: 4                       # parallel CDS requests
+  rain_day_mm: 1.0
+  heat_day_c: 32.0
+  windy_day_ms: 8.0                # daily mean wind speed
+  headwind_ms: 3.0                 # along-route daily mean component counted as a head/tailwind day
+
+comfort:                           # 0-100 per section and month
+  weights: {temperature: 0.4, rain: 0.3, daylight: 0.15, wind: 0.15}
+  temperature: {ideal_min_c: 18, ideal_max_c: 26, zero_low_c: 8, zero_high_c: 34}
+  rain_zero_share: 0.5             # share of rain days at which the rain part reaches 0
+  daylight: {full_h: 11, zero_h: 8}
+  windy_zero_share: 0.3
+  heat_penalty: 40                 # points subtracted at 100% heat days
+  labels: [[75, excellent], [60, good], [45, fair], [0, poor]]
+
+best_time:
+  weights: {comfort: 0.7, services: 0.2, quietness: 0.1}
+  quietness: {tourism: 0.5, school: 0.5}
+
+direction:
+  wind_scale_ms: 1.5               # mean along-route wind that counts as a clear advantage
+  climb_scale_m: 300               # climbing difference that counts as a clear advantage
+  either_below: 0.5
+
+themes:                            # radii in metres; scores are raw / route p90, capped at 1
+  coast: {line_m: 1000, beaches_m: 1000}
+  water: {near_m: 500}
+  forest: {near_m: 500}
+  wine: {vineyard_m: 1000, wineries_m: 1000}
+  heritage: {near_m: 1000}
+  viewpoints: {near_m: 1000}
+  mountains: {peaks_m: 2000}
+  culture: {built_m: 500, near_m: 1000}
+
+remoteness:
+  far_m: 5000                      # route counted as remote where it is further than this from a village or larger
+
+stations:
+  near_end_m: 5000                 # a bike-carrying station "at" a section end: access point within this of it
+
+levels:                            # D36: what a rider is comfortable riding per day, with luggage
+  - {level: 1, name: Leisurely, km_min: 20, km_max: 40, climb_max_m: 300}
+  - {level: 2, name: Easy-moderate, km_min: 40, km_max: 60, climb_max_m: 500}
+  - {level: 3, name: Moderate, km_min: 50, km_max: 80, climb_max_m: 850}
+  - {level: 4, name: Challenging, km_min: 70, km_max: 100, climb_max_m: 1200}
+  - {level: 5, name: Tough, km_min: 90, km_max: 130, climb_max_m: 1500}
+
+breaks:
+  hard_crossing_m: 50000           # ferry/train links longer than this end a stretch (as do missing links)

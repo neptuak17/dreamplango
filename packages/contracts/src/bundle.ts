@@ -20,6 +20,7 @@ export interface BundleContract {
   scores: ScoresFile;
   places: PlacesFile;
   services: ServicesFile;
+  dream: DreamFile;
   current: CurrentPointer;
 }
 export interface BundleManifest {
@@ -539,6 +540,213 @@ export interface ServiceGap {
    * Gap length that triggers a finding for this service
    */
   threshold_m: number;
+}
+export interface DreamFile {
+  profile: string;
+  season_year: number;
+  climate_source: string;
+  levels: RiderLevel[];
+  themes: ThemeInfo[];
+  sections: DreamSection[];
+  breaks: RouteBreak[];
+}
+/**
+ * D36: what a rider is comfortable riding per day, with luggage.
+ */
+export interface RiderLevel {
+  level: number;
+  name: string;
+  km_min: number;
+  km_max: number;
+  climb_max_m: number;
+}
+export interface ThemeInfo {
+  id: string;
+  title: string;
+  /**
+   * How the theme is measured, in plain words
+   */
+  measures: string;
+}
+export interface DreamSection {
+  number: number;
+  from_m: number;
+  to_m: number;
+  length_m: number;
+  country: string | null;
+  ascent_fwd_m: number | null;
+  ascent_rev_m: number | null;
+  max_grade_500m: number | null;
+  /**
+   * Rider level (D36) needed to ride the section as one day, forward
+   */
+  grade_fwd: number | null;
+  grade_rev: number | null;
+  /**
+   * Share of road, cycle_path, gravel and unknown (D36)
+   */
+  surfaces: {
+    [k: string]: number;
+  };
+  /**
+   * Share on busy roads (LTS 4)
+   */
+  busy_share: number;
+  themes: {
+    [k: string]: ThemeScore;
+  };
+  /**
+   * Share of km further than the remoteness distance from a village
+   */
+  remote_share: number;
+  longest_remote_m: number;
+  climate: ClimateMonths | null;
+  daylight_h: number[];
+  crowding: Crowding;
+  campsites: CampsiteSeasons;
+  /**
+   * Counted places by kind: campsite, hostel, hotel
+   */
+  accommodation: {
+    [k: string]: number;
+  };
+  /**
+   * Counted places per service type (M2)
+   */
+  services: {
+    [k: string]: number;
+  };
+  /**
+   * Worst-month longest gap inside the section, per service
+   */
+  longest_gap_m: {
+    [k: string]: number;
+  };
+  /**
+   * A bike-carrying station near the section start (name)
+   */
+  station_start: string | null;
+  station_end: string | null;
+  /**
+   * Findings overlapping the section, per severity
+   */
+  findings: {
+    [k: string]: number;
+  };
+  comfort: (number | null)[];
+  best_time: (number | null)[];
+  /**
+   * Per month: which best-time inputs had no data (D37)
+   */
+  partial: string[][];
+  direction: Direction[];
+  /**
+   * Data gaps the rider should check themselves (D37)
+   */
+  check: string[];
+}
+export interface ThemeScore {
+  /**
+   * 0-1: the section's raw value against the route's 90th percentile; null when unknown (D37)
+   */
+  score: number | null;
+  /**
+   * Plain-language facts behind the score
+   */
+  note: string;
+}
+/**
+ * Monthly normals at the section's climate point (D34).
+ */
+export interface ClimateMonths {
+  /**
+   * ERA5 grid point the values come from
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  point: [number, number];
+  /**
+   * From the section midpoint to that point
+   */
+  distance_m: number;
+  tmax_c: (number | null)[];
+  tmin_c: (number | null)[];
+  /**
+   * Share of days with at least the rain-day threshold
+   */
+  rain_days: (number | null)[];
+  /**
+   * Mean rain per day, mm
+   */
+  rain_mm: (number | null)[];
+  heat_days: (number | null)[];
+  windy_days: (number | null)[];
+  /**
+   * Mean along-route wind riding forward (+ tailwind, - headwind)
+   */
+  wind_along_ms: (number | null)[];
+  headwind_days_fwd: (number | null)[];
+  headwind_days_rev: (number | null)[];
+}
+export interface Crowding {
+  country: string | null;
+  /**
+   * Share of the country's regions on school holiday, per month (June-September: no data, as the source omits summer breaks)
+   */
+  school_days: (number | null)[];
+  /**
+   * Calendar year of the school-holiday dates used
+   */
+  school_year: number | null;
+  /**
+   * Nationwide public holidays in the month
+   */
+  public_holidays: (number | null)[];
+  /**
+   * Calendar year of the public-holiday dates used
+   */
+  public_year: number | null;
+  /**
+   * Tourist nights in the month / monthly average (1 = average)
+   */
+  tourism_index: (number | null)[];
+  tourism_years: string | null;
+}
+export interface CampsiteSeasons {
+  /**
+   * Campsites that count on this section (M2)
+   */
+  counted: number;
+  /**
+   * Of those, how many publish an opening season
+   */
+  published: number;
+  /**
+   * Per month: published campsites open all month
+   */
+  open: number[];
+  /**
+   * Per month: published campsites open part of the month
+   */
+  partly: number[];
+}
+export interface Direction {
+  advice: "forward" | "reverse" | "either" | "unknown";
+  wind_along_ms: number | null;
+  /**
+   * Reverse climbing minus forward climbing (positive favours forward); null when unknown
+   */
+  climb_diff_m: number | null;
+}
+export interface RouteBreak {
+  after_section: number;
+  type: string;
+  straight_distance_m: number;
+  /**
+   * A stretch may not continue across this break
+   */
+  hard: boolean;
 }
 export interface CurrentPointer {
   run_id: string;

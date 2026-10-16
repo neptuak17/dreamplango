@@ -793,3 +793,273 @@ select {
     border-right: 0;
   }
 }
+
+/* --- Dream (M3) ------------------------------------------------------------------------------------------ */
+
+.dream {
+  padding: 4px 0 12px;
+}
+
+.dream-block {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px 8px;
+}
+
+.dream-block > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 2px 0 6px;
+}
+
+.dream-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  font-size: 12.5px;
+}
+
+.dream-form label,
+.dream-needs label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dream-form select,
+.dream-form input,
+.dream-needs select,
+.dream-metric {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 400;
+  margin: 0;
+  min-width: 0;
+  width: auto;
+  flex: 1;
+}
+
+.dream-hint {
+  font-size: 11.5px;
+  margin: 4px 0 6px;
+}
+
+.dream-surfaces {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0;
+}
+
+.seg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.seg > span {
+  width: 78px;
+}
+
+.seg button,
+.dream-themes button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.seg button.on,
+.dream-themes button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.dream-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.dream-needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+}
+
+.stretch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+
+.stretch:hover {
+  background: #f3f5f7;
+}
+
+.stretch.selected {
+  background: var(--selected);
+}
+
+.stretch-title {
+  font-weight: 550;
+  font-size: 13px;
+}
+
+.stretch-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stretch-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.stretch-detail .watch {
+  color: #9c4a00;
+}
+
+.stretch-detail .check {
+  color: var(--muted);
+}
+
+.heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+  font-size: 10px;
+}
+
+.hm-row {
+  display: grid;
+  grid-template-columns: 28px repeat(12, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.hm-head {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+  padding-bottom: 2px;
+}
+
+.hm-head span {
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.hm-head span.on {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.hm-label {
+  color: var(--muted);
+  text-align: right;
+  padding-right: 3px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.hm-row.on .hm-label {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.hm-cell {
+  height: 9px;
+  border-radius: 1px;
+  cursor: pointer;
+}
+
+.hm-cell.none {
+  background: repeating-linear-gradient(45deg, #e9ecef 0 2px, #f8f9fa 2px 4px);
+}
+
+.hm-cell.partial {
+  outline: 1px dotted rgb(0 0 0 / 0.45);
+  outline-offset: -1px;
+}
+
+.hm-cell.col {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+.hm-row.on .hm-cell {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.reality {
+  margin: 4px 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.reality-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.reality-grid {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 2px 8px;
+}
+
+.reality-grid > span {
+  color: var(--muted);
+}
+
+.reality-grid > b {
+  font-weight: 500;
+}
+
+.reality-notes {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.reality-sub {
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.reality-check ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: #6b4e00;
+}
+
+.teaser {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #fff4e6;
+  color: #8a4b00;
+  font-size: 11.5px;
+}
