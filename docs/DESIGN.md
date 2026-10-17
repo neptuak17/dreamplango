@@ -75,6 +75,8 @@
 | D36 | 2026-10-16 | **Rider fitness uses five self-chosen levels, and route stretches are graded on the same scale.** The levels use the language of cycling-holiday grades (Exodus, Skedaddle, KE Adventure, Headwater, Much Better Adventures). Each is defined by what the rider is comfortable riding **per day with luggage**:<ul><li>1 Leisurely: 20–40 km, up to ~300 m of climbing</li><li>2 Easy–moderate: 40–60 km, up to ~500 m</li><li>3 Moderate: 50–80 km, up to ~850 m</li><li>4 Challenging: 70–100 km, up to ~1,200 m</li><li>5 Tough: 90–130 km, 1,500 m and more</li></ul>The bands are a blend of those operators' published figures, not any one company's, and are starting points to tune. **Surfaces:** the rider marks each of *road*, *cycle paths* and *gravel* as prefer, OK or avoid. Every kilometre falls into exactly one of the three, from the infrastructure and surface layers (11.4). |
 | D37 | 2026-10-16 | **Missing data is shown as unknown and becomes the rider's call** (principle 1, applied to Dream and onwards). Where we have no data (school holidays or tourism figures for some countries, opening seasons, anything else), we say so. The gap becomes a "check yourself" item for the rider to judge or follow up.<ul><li>**No gap-filling:** no curated guesses, no estimates extrapolated from other places, no assumed typical values.</li><li>**Scores:** a score whose input is missing leaves that part out and shows that it is missing; it never assumes a neutral value.</li><li>**Facts are reported for the known part only,** e.g. "4 of 37 campsites here publish a season; 3 are open in October".</li><li>**Sourced facts are fine:** curated tables that cite a source (e.g. bike carriage, D20) are allowed. Invented or "typical" values are not.</li></ul> |
 | D38 | 2026-10-16 | **A conversational assistant for each phase is a future capability: grounded, tool-based and on the device first** (extends D7 and the LLM list in 12). No milestone changes.<ul><li>**Grounding:** the model never answers from its own general knowledge. It may only call tools over our data (section summary, climate by month, places ahead, findings in a range, a matchmaker run; later the rider's plan and live data by block). It phrases the result with km, source and date. Missing data gets D37 wording and a "check yourself" item.</li><li>**Honesty checks:** a test set of real questions per phase, with the expected tool calls, and an automatic check that every number in an answer comes from a tool result; otherwise the assistant declines.</li><li>**By phase:** Dream first (plain-language questions turned into matchmaker filters, "why this stretch?", comparisons), then Plan, then Go.</li><li>**Go offline:** on the phone, over the offline pack. Short answers; it shows how old the data is; it is never the only path to safety information (the bail-out button, alerts and the Ahead list stay as plain screens).</li><li>**Where it runs:** on the device, either Apple's built-in on-device model (Foundation Models, iOS 26+, Apple Intelligence devices, small context) or a bundled open-weight model (about 1–4B parameters, an optional 0.7–2.5 GB download), behind D7's abstraction. The choice is made by testing both on the question set. Apache or MIT licences are preferred. On the web, only as an optional local download. **Server-side inference would send riders' questions off the device, so it needs the owner's agreement first (D30).**</li><li>**Languages:** tested in at least English, French, German, Spanish and Italian. Route and closure answers say "check locally"; no medical advice.</li><li>**First step, after M3:** a Dream prototype in the web viewer, using a local model on the laptop (Ollama or llama.cpp in Ubuntu) plus the question test set.</li></ul> |
+| D39 | 2026-10-16 | **User GPX audits come before M4, as milestone M3.5** (extends D22–D25). The owner supplies a GPX file through a laptop command (`npm run audit:file`), and the full audit built so far (M1–M3) runs on it as a private audit (D25). A private audit stays until it is explicitly deleted (`npm run forget`). Upload from the viewer, the on-demand server and personal Trip Passes come later (D31, D32). Design in 11.5. |
+| D40 | 2026-10-16 | **How a user's route is audited, for now** (the owner's choices).<ul><li>**Sections:** the file's own tracks if it has several, otherwise equal stages of about 60 km. This may change later.</li><li>**Rules:** the ECS-style check runs as on EuroVelo routes, with signage unknown. A DreamPlanGo profile of our own may follow.</li><li>**Waypoints:** shown as private user places (D24), and never counted in services, gaps or findings.</li><li>**Overlap:** when the route shares roads with an audited public route, the shared length is reported.</li></ul> |
 
 ---
 
@@ -656,6 +658,7 @@ Milestones are ordered so you can see something in the browser early and tune as
 | **M1** ✅ 2026-10-14 | Infrastructure audit | Corridor extraction; Valhalla matching; layers: infrastructure type, surface, traffic stress (LTS), elevation and gradient, waymarked network (OSM relations), continuity and typed gaps. ECS-style rules v0, scores, findings. Bundle files per D11. Prototype: map coloured by layer, **strip diagram** under the elevation profile, stats card, findings linked to the map. **Known limits, carried forward:** <ul><li>The DEM is sampled along the published track, not the matched road, so some coastal values may be cliff artefacts.</li><li>No national LiDAR terrain models yet.</li><li>Signage evidence is EuroVelo status plus OSM relations only (no guideposts or imagery).</li><li>LTS is heuristic, with no traffic counts.</li><li>Straight-line placeholders are not routed around. Where they make up more than a quarter of a daily section (EV8 sections 45 and 53, 41 km), the terrain under them is left out of the climbing figures. Only the net change across them counts, so the figures are minimums, shown as "≥" with the unknown km (D37, fixed 2026-10-16).</li><li>Seasonality moved to M2.</li></ul> |
 | **M2** ✅ 2026-10-14 | Services & access | Places conflation (OSM + Overture, which includes Foursquare: D16), seasonal opening, detour distances, stations + curated bike policy, services-gap and bail-out rules. Prototype: "what's ahead from km X" panel and services filters. See 11.2 and the M2 results in `docs/notes/eurovelo-gpx.md`. **Known limits, carried forward:** <ul><li>Opening seasons are published for only ~2% of accommodation (OSM; Overture has none), so seasonal gaps are mostly unknown. Candidate fixes: campsite directories, DATAtourisme for France, field reports.</li><li>No timetables yet (GTFS), so ECS service frequency is not checked; buses and taxis are not counted for bail-out.</li><li>Bike policy for Greece and Albania is unknown, and Türkiye's is low-confidence.</li><li>Ferry terminals count as bike-carrying by default (low confidence).</li><li>Climb to a place is net elevation difference, not the climb along the detour.</li><li>No cyclist-friendly labels (Accueil Vélo etc.) yet.</li></ul> |
 | **M3** ✅ 2026-10-16 | Dream data | Per daily section × month: ERA5 climate normals, daylight, wind along the route and direction advice, school and public holidays, tourism intensity, campsite seasons. Per section: eight scenery themes, remoteness, D36 grades and surface shares. Comfort and best-time scores; `dream.json`; the `@dpg/dream` matchmaker. Prototype: a Dream tab with the **best-time heatmap**, the **matchmaker** and a reality-check card, with the stretch highlighted on the map. Concept D35, rider levels D36, design in 11.4, results in `docs/notes/eurovelo-gpx.md`. **Known limits, carried forward:** <ul><li>The ERA5 grid fallback wasn't built: the point time series served all 73 EV8 points (about 20 minutes through the CDS queue on the first run, cached afterwards).</li><li>OpenHolidays leaves out summer school breaks, so June–September show no school-holiday data anywhere. 2027 school calendars are published only for France; the others use 2026, and the card says which year. Montenegro, Greece, Türkiye and Cyprus have no holiday data at all.</li><li>Crowding is national. Eurostat tourism intensity (2022–2025) covers all ten EV8 countries.</li><li>Campsite seasons are known for only about 4% of campsites; the rest is a "check yourself" item.</li><li>"Train at both ends" counts railway stations only. Ferry terminals don't count, unlike M2's bail-out rule.</li><li>Remoteness is the longest stretch, and the share of km, more than 5 km from a village or larger (11.4 first said 10 km for the longest stretch).</li><li>Where more than a quarter of a section is a straight-line placeholder (EV8 sections 45 and 53), terrain under the placeholder is unknown. The rest of the section is still measured: its climbing and grade are shown as minimums ("at least"), with the unknown km, and stretches sum them the same way. A minimum already over the rider's level still rules a stretch out. Section 53 is placeholder throughout, so its climbing is unknown and its grade uses distance alone. The mountains theme is "no data" for both. Shorter placeholders are flagged as approximate. M1's climbing figures follow the same rule, and Dream reuses them rather than measuring again.</li><li>Not built: ferry-crossing seasons, and the optional comfort strip row under the profile.</li><li>All weights and thresholds are untuned placeholders (D13).</li></ul> |
+| **M3.5** | User GPX audits | The full audit (M1–M3) on a route file the owner supplies, run from the laptop as a private audit: a general GPX reader and a "user" route source, stages of about 60 km, user places from waypoints (never counted), the overlap with public routes, private bundles kept until deleted, and a route switcher in the viewer. Decisions D39–D40, design in 11.5. |
 | **M4** | Plan | `packages/planner` with stage planner and riding-time model; annotated per-day GPX export; bridge suggestions for gaps. Prototype: plan a trip, compare plans. |
 | **M5** | Go simulation | Live providers (forecast grid by block, MeteoAlarm, CAMS, FIRMS/EFFIS, river gauges, closures registry, OSM change monitor). Prototype: **"simulate being at km X on date/time Y"**, showing the briefing a rider would see. |
 | **M6** | Reports & calibration | HTML/PDF audit report, run-to-run diff viewer, calibration against a published ECS certification report (e.g. EV15) and against your own field rides. |
@@ -762,7 +765,7 @@ Each service gap is computed for each month, counting places whose month code is
 
 ### 11.3 Later: user routes and other networks (D22–D25)
 
-This belongs to the "user GPX audits" and "other networks" phases. It is not a milestone, and M3–M6 are unchanged. It records how those phases slot into what M0–M2 built.
+This records how user routes and other networks slot into what M0–M2 built. The user-GPX part is now milestone M3.5 (D39, design in 11.5); other networks remain a later phase.
 
 **Flow for a user's file:**
 
@@ -899,6 +902,69 @@ All weights and thresholds live in a YAML profile (`engine/profiles/dream-v0.yam
 - Holidays and tourism intensity are missing for some countries (BA, ME, GR, TR and CY for holidays), so they show "no data" (D37).
 - Scenery depends on how well OSM is mapped locally.
 - No photos or descriptions (D35).
+
+### 11.5 M3.5 design: user GPX audits (for review)
+
+D22–D25, D39, D40. The whole audit built so far (M1 road layers and terrain, M2 services, M3 Dream) runs on a route file the owner supplies, as a private audit on the laptop. EV8 is unchanged.
+
+#### Running it
+
+```
+npm run audit:file -- path/to/route.gpx [--name "Pyrenees crossing"]
+```
+
+The command does everything, in order:
+1. Reads the file and registers the route as `user/<id>`. The id comes from the file's contents, so the same file always gets the same id, and re-runs add new bundles to it.
+2. Builds the 15 km corridor, downloads any OSM country extracts it needs, and cuts them to the corridor.
+3. Builds Valhalla tiles for the corridor, or reuses EV8's when the corridor lies inside EV8's. EV8's Valhalla is stopped meanwhile.
+4. Runs the audit as for EV8 and writes a private bundle.
+5. Restarts EV8's Valhalla and prints the viewer link for the new route.
+
+`npm run forget -- <id>` deletes the route.
+
+The file can live anywhere outside the repository. The command copies it into the data folder, so a private route is never committed.
+
+#### What changes
+
+| Part | Design |
+|---|---|
+| **GPX reader** (D22) | One reader for any GPX: tracks and their segments (`<trk>`), planned routes (`<rte>`), waypoints (`<wpt>`), and the file's name and description. A file with tracks uses them; a file with only route points uses those. Repeated points and GPS jitter at stops are dropped. FIT comes later. |
+| **User route source** | Network `user`; id `u` plus the first 10 hex characters of the file's SHA-256. The name comes from `--name`, else the file's metadata or first track, else the file name. Status and licence are unknown (D25), visibility is private, and the file's direction of travel is "forward". |
+| **Sections** (D40) | A file with several tracks gets one section per track, in file order, with orientation inferred as for EV8. Otherwise the route is cut into equal stages, as many as make them closest to 60 km. Each stage is named after the nearest town or village (within 5 km) at its ends, e.g. "Stage 4: Foix – Ax-les-Thermes", otherwise by km. |
+| **Gaps** | Gaps between tracks are classified from OSM ferry and rail data, as for EV8. There is no hand-curated route file. Straight-line stretches are flagged and handled as on EV8, including the climbing rule. |
+| **Rules** (D40) | The ECS-style check runs as on EV8. Signage is unknown, so that criterion is "unknown" everywhere and the essential and important pass rates come out lower. The OSM waymarked-route layer shows where the route follows signed routes. EuroVelo-only findings are off: status findings, OSM EuroVelo-relation coverage, and EuroVelo's public-transport advice. |
+| **User places** (D24, D40) | Waypoints become private places (`source: user`) on the route's measure axis. Their type comes from the GPX `<type>` or `<sym>` where present, otherwise "waypoint". They are shown on the map and in the Ahead list in their own style, and are **never counted** in services, gaps or findings. They live only in that route's bundle (`user_places.json`). |
+| **Overlap** (D40) | Public bundles gain a list of the OSM ways they are matched to. A user route reports the length it shares with each public route, when there is any, e.g. "38 km (12%) follows EuroVelo 8, sections 41–43". The user route's own ways stay in its private bundle. |
+| **Private storage** (D25, D39) | Private bundles live under `bundles/private/user/<id>/`, marked `visibility: private` in the manifest. The API never lists them and serves one only by its id. The viewer remembers the private routes opened in this browser, for its route switcher. They are kept until deleted. |
+| **Forget** (D39) | Deletes everything specific to the route: the file copy, its bundles, corridor extract, match cache, Overture places fetched along it, Dream extracts and routing tiles. Shared caches stay, because they are kept by area, not by route (D25): OSM country extracts, elevation tiles, ERA5 grid points, and holidays and tourism by country. |
+| **Climate** | Climate points snap to ERA5's own 0.25° grid, so a point fetched for one route serves any route nearby. EV8's 73 downloads are re-indexed by grid cell, so nothing is fetched again. |
+| **Viewer** | A route switcher lists the public routes from the API, plus the private routes opened in this browser, marked "Private". Status shows as unknown, and the EuroVelo status layer is hidden for user routes. User places get their own map style and Ahead rows. The summary shows the overlap. Dream works unchanged. |
+
+#### Build order and checks
+
+1. GPX reader and user route source, with stage splitting and naming. Unit tests use small synthetic files: tracks, route points only, waypoints, several tracks.
+2. Route sources chosen by network in the CLI and audit; EuroVelo-only findings switched off.
+3. Private bundles, the API, and `forget`.
+4. The `audit:file` command: corridor, Valhalla tiles and restart; ERA5 grid snapping.
+5. User places and the overlap.
+6. Viewer: route switcher, private label, user places, overlap.
+7. **Acceptance:**
+   - the owner's planned France–Spain route over the Pyrenees audits with one command and opens in the viewer as a private route, with every layer, its Pyrenean climbs, services, the ECS-style check and Dream;
+   - its waypoints show but change no count;
+   - the overlap with EV8 is reported if the routes share roads;
+   - `forget` leaves nothing route-specific behind;
+   - EV8's audit is unchanged apart from the new way list, and all tests and lint pass.
+
+#### Known limits, accepted for M3.5
+
+- GPX only; FIT, TCX and the others come later (D22).
+- Files come in through a laptop command. There is no upload in the viewer, and no on-demand server or personal Trip Pass yet (D31, D32).
+- Places are still fetched per route; the shared catalogue by area comes later (D23).
+- Routing tiles are built per route corridor.
+- Signage is unknown on user routes.
+- A file with only sparse route points (turn points) is approximate, and its long straight stretches are flagged.
+- Countries missing from the bike-carriage table show "unknown" bike policy (for example Andorra, if the route crosses it).
+- The first audit in a new area takes longer: downloads, tile building and the Copernicus queue. The France and Spain extracts are already on disk.
 
 ---
 
