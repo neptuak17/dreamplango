@@ -1,4 +1,4 @@
-import type { Finding, Place } from "@dpg/contracts";
+import type { Finding, Place, UserPlace } from "@dpg/contracts";
 import {
   AttributionControl,
   type ExpressionSpecification,
@@ -57,6 +57,30 @@ interface Props {
   onSelectPlace: (id: string | null) => void;
   /** Reported after every zoom change (used to thin places). */
   onZoom?: (zoom: number) => void;
+  /** Waypoints from the rider's own file (D24), drawn in their own style. */
+  userPlaces?: UserPlace[];
+}
+
+function userPlacesGeoJSON(places: UserPlace[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: places.map((p) => ({
+      type: "Feature" as const,
+      properties: { id: p.id },
+      geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
+    })),
+  };
+}
+
+function userPlacePopup(p: UserPlace): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "place-popup";
+  line(root, p.name ?? "Unnamed waypoint", "pp-title");
+  line(root, `your waypoint · ${p.kind.replaceAll("_", " ")} · km ${km(p.at_m, 1)}`, "pp-sub");
+  if (p.offset_m >= 100) line(root, `${distanceLabel(p.offset_m)} from the route (straight line)`);
+  if (p.note) line(root, p.note, "pp-note");
+  line(root, "From your own file: private, and never counted in the audit's figures.", "pp-src");
+  return root;
 }
 
 function placesGeoJSON(places: Place[]) {
@@ -290,6 +314,18 @@ export function RouteMap(props: Props) {
           "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 7, 0.5, 13, 1.5],
         },
       });
+      m.addSource("user-places", { type: "geojson", data: userPlacesGeoJSON(latest.current.userPlaces ?? []) });
+      m.addLayer({
+        id: "user-places",
+        type: "circle",
+        source: "user-places",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 4, 13, 7],
+          "circle-color": "#ffffff",
+          "circle-stroke-color": "#7048e8",
+          "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 7, 2, 13, 3],
+        },
+      });
       m.addSource("ahead", { type: "geojson", data: markerGeoJSON(latest.current.marker) });
       m.addLayer({
         id: "ahead",
@@ -298,7 +334,7 @@ export function RouteMap(props: Props) {
         paint: { "circle-radius": 8, "circle-color": "#ffffff", "circle-stroke-color": "#1c7ed6", "circle-stroke-width": 4 },
       });
 
-      const clickable = ["places", "findings", "overlay-line", "route-signed", "route-unsigned"];
+      const clickable = ["user-places", "places", "findings", "overlay-line", "route-signed", "route-unsigned"];
       for (const layer of clickable) {
         m.on("mouseenter", layer, () => (m.getCanvas().style.cursor = "pointer"));
         m.on("mouseleave", layer, () => (m.getCanvas().style.cursor = ""));
@@ -307,7 +343,10 @@ export function RouteMap(props: Props) {
         const hits = m.queryRenderedFeatures(e.point, { layers: clickable.filter((id) => m.getLayer(id)) });
         const hit = hits[0];
         if (!hit) return latest.current.onClickEmpty();
-        if (hit.layer.id === "places") latest.current.onSelectPlace(String(hit.properties.id));
+        if (hit.layer.id === "user-places") {
+          const p = latest.current.userPlaces?.find((x) => x.id === String(hit.properties.id));
+          if (p) new Popup({ offset: 10 }).setLngLat([p.lon, p.lat]).setDOMContent(userPlacePopup(p)).addTo(m);
+        } else if (hit.layer.id === "places") latest.current.onSelectPlace(String(hit.properties.id));
         else if (hit.layer.id === "findings") latest.current.onSelectFinding(String(hit.properties.id));
         else latest.current.onClickRoute(Number((hit.properties as RideProps).section), [e.lngLat.lng, e.lngLat.lat]);
       });
@@ -336,6 +375,12 @@ export function RouteMap(props: Props) {
     if (!m || !ready.current) return;
     (m.getSource("places") as GeoJSONSource | undefined)?.setData(placesGeoJSON(props.places));
   }, [props.places]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    (m.getSource("user-places") as GeoJSONSource | undefined)?.setData(userPlacesGeoJSON(props.userPlaces ?? []));
+  }, [props.userPlaces]);
 
   useEffect(() => {
     const m = map.current;

@@ -2,7 +2,7 @@
 
 Route audits and Dream–Plan–Go trip support for long-distance cycle routes, starting with EuroVelo 8. Design, decisions and roadmap: [docs/DESIGN.md](docs/DESIGN.md).
 
-**Status:** milestone M3 (Dream data). The engine matches the official EV8 track to OpenStreetMap and produces several layers. A local API serves the results, and a web viewer shows them on a map and in a strip diagram.
+**Status:** milestone M3.5 (audits of your own GPX files). The engine matches the official EV8 track, or a route file of your own, to OpenStreetMap and produces several layers. A local API serves the results, and a web viewer shows them on a map and in a strip diagram.
 - Layers (M1): infrastructure, surface, traffic stress, waymarked network, gradient, typed gaps (ferry, rail link, missing), climbs and an indicative ECS-style check.
 - Services (M2):
   - places from OSM and Overture (water, food, toilets, accommodation, bike shops, repair stations, stations, pharmacies, ATMs, hospitals), each with its ridden detour from the route and its season by month;
@@ -13,6 +13,7 @@ Route audits and Dream–Plan–Go trip support for long-distance cycle routes, 
   - climate by section and month (Copernicus ERA5), daylight, holidays and tourism by month, scenery themes and remoteness;
   - simple comfort, best-time and direction scores, with "no data" shown honestly;
   - in the viewer, a Dream tab: a trip finder for your level, days, surfaces and themes, a best-time heatmap, and a reality-check card.
+- Your own routes (M3.5): the same audit on a GPX file you supply, as a private route. It is split into stages of about 60 km; its waypoints are shown but never counted, and any length it shares with EV8 is reported.
 
 ## Layout
 
@@ -53,6 +54,18 @@ npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhos
 
 `npm run ingest:ev8` still builds a quick geometry-only bundle without OSM, Valhalla or the DEM.
 
+## Auditing your own route file (M3.5)
+
+```bash
+npm run audit:file -- path/to/route.gpx --name "My route"
+```
+
+One command registers the file as a private route (`user/<id>`; the id comes from the file's contents) and cuts its corridor from the OSM extracts. It runs Valhalla on that corridor's tiles, or on EV8's when they already cover it, then runs the full audit and puts back the Valhalla that was running before. It ends by printing the viewer link (`http://localhost:5173/?route=user/<id>`).
+
+- Private routes are stored apart under `~/dpg-data/bundles/private/`. The API never lists them; the viewer remembers the ones you have opened in that browser.
+- `npm run forget -- <id>` deletes the route and everything kept for it: its file, bundles, corridor, caches and routing tiles. Shared caches kept by area stay.
+- Route files are ignored by git (`*.gpx`, `*.fit`), so a route of your own is never committed.
+
 ## Other tasks
 
 | Command | Does |
@@ -62,6 +75,7 @@ npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhos
 | `npm run engine:lint` | ruff |
 | `npm run contracts` | Re-export the JSON Schema and regenerate `packages/contracts` after changing engine models |
 | `npm run valhalla:status` / `valhalla:down` | Check or stop the routing service |
+| `npm run audit:file -- <file.gpx>` / `npm run forget -- <id>` | Audit a route file of your own as a private route / delete it |
 
 ## Data attribution
 

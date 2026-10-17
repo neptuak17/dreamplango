@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Delete a private route and everything kept for it (D39). From Windows: npm run forget -- <id> [--yes]
+# Its routing tiles' Valhalla is stopped first. Shared caches kept by area, not by route (D25), stay.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[ $# -ge 1 ] || { echo "usage: npm run forget -- <id> [--yes]" >&2; exit 2; }
+ID="$1"
+[[ "$ID" =~ ^u[0-9a-f]{10}$ ]] || { echo "not a private route id: '$ID' (e.g. u4ad6e50f59)" >&2; exit 2; }
+shift
+"$REPO/scripts/valhalla" down user "$ID" >/dev/null 2>&1 || true
+exec "$REPO/scripts/dpg" forget user "$ID" "$@"

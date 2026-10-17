@@ -53,7 +53,9 @@ def rule_findings(
     daily: list[DailySection],
     scores: list[SectionScores],
     matches: list[LineMatch],
+    eurovelo: bool = True,
 ) -> list[dict]:
+    """`eurovelo`: the route is a EuroVelo route, so EuroVelo-only findings apply (D40)."""
     cfg = profile.findings
     gap = cfg["merge_gap_m"]
     by_layer = {layer: [e for e in events if e.layer == layer] for layer in {e.layer for e in events}}
@@ -163,7 +165,7 @@ def rule_findings(
 
     for d, s, match in zip(daily, scores, matches, strict=True):
         ev_share = s.shares.get("cycle_network", {}).get("eurovelo_route", 0.0)
-        if ev_share < cfg["osm_route_min_share"]:
+        if eurovelo and ev_share < cfg["osm_route_min_share"]:
             add(
                 rule_id="audit.osm_route_coverage",
                 category="data_quality",
@@ -218,12 +220,20 @@ GAP_TEXT = {
 }
 
 
-def gap_findings(components: list[Component], notes: list[dict]) -> list[dict]:
+# Off EuroVelo routes, the public-transport advice is not EuroVelo's (D40).
+PUBLIC_TRANSPORT_ADVICE = (
+    "Rail stations lie near both ends of the gap, so a train probably bridges it. Check bike carriage rules."
+)
+
+
+def gap_findings(components: list[Component], notes: list[dict], eurovelo: bool = True) -> list[dict]:
     by_id = {c.id: c for c in components}
     out = []
     for note in notes:
         comp = by_id[note["component"]]
         category, severity, label, advice = GAP_TEXT.get(comp.gap_type, GAP_TEXT[GapType.MISSING])
+        if not eurovelo and comp.gap_type == GapType.PUBLIC_TRANSPORT:
+            advice = PUBLIC_TRANSPORT_ADVICE
         dist = comp.straight_distance_m or 0.0
         what = f"{_km(dist)}" if dist >= 1000 else f"{dist:.0f} m"
         extra = []

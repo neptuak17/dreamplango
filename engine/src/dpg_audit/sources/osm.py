@@ -101,7 +101,16 @@ def extract_corridor(extracts: list[Path], corridor_geojson: Path, out: Path) ->
         _osmium("extract", "--overwrite", "-s", "smart", "-p", str(corridor_geojson), str(pbf), "-o", str(piece))
         pieces.append(piece)
     print("merging corridor pieces", flush=True)
-    _osmium("merge", "--overwrite", *map(str, pieces), "-o", str(out))
+    merged = out.with_name(f"merged-{out.name}")
+    _osmium("merge", "--overwrite", *map(str, pieces), "-o", str(merged))
     for piece in pieces:
         piece.unlink()
+    # Neighbouring extracts overlap at borders. Downloaded on different days, they can hold two versions of the same
+    # object, which later osmium steps refuse ("ID twice in input"): keep only the newest version of each.
+    if _osmium("fileinfo", "-e", "-g", "data.multiple_versions", str(merged)).strip() == "yes":
+        print("keeping the newest version of objects that differ between extracts", flush=True)
+        _osmium("time-filter", "--overwrite", str(merged), "-o", str(out))
+        merged.unlink()
+    else:
+        merged.replace(out)
     return out

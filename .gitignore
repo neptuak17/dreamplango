@@ -1,6 +1,10 @@
 # Data (raw downloads, caches, bundles) never goes in git
 /data/
 
+# Route files: a rider's own routes are private (D25); downloads live in the data folder
+*.gpx
+*.fit
+
 # Python
 __pycache__/
 *.py[cod]

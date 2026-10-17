@@ -76,6 +76,17 @@ def test_read_daily_and_monthly_normals(tmp_path):
     assert mon["tmax_c"][5] is None  # no June data: unknown, not zero
 
 
+def test_era5_cache_is_kept_by_grid_cell(tmp_path):
+    years = (2016, 2025)
+    old = tmp_path / "era5ts_39.47_-0.52_2016-2025.zip"  # named after a route point, before M3.5
+    fake_era5_zip(old, days=3)
+    near = [climate.ClimatePoint(0.0, -0.52, 39.47), climate.ClimatePoint(1.0, -0.45, 39.55)]  # one 0.25° cell
+    daily, files = climate.fetch_all(near, years, tmp_path, workers=2, log=lambda _: None)
+    assert not old.exists() and files == [tmp_path / "era5ts_g39.50_-0.50_2016-2025.zip"]
+    assert all(d is not None and d.grid == (-0.5, 39.5) for d in daily)  # served from the cache, no request
+    assert climate.grid_cell(-0.62, 39.38) == (-0.5, 39.5)
+
+
 def test_climate_points_spacing():
     from dpg_audit.lrs import RoutePath
 

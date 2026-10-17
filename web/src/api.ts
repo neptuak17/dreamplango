@@ -14,6 +14,8 @@ import type {
   SectionsFile,
   ServicesFile,
   Signage,
+  UserPlace,
+  UserPlacesFile,
 } from "@dpg/contracts";
 
 export interface RouteListing {
@@ -71,6 +73,8 @@ export interface RouteBundle {
   services: ServicesFile | null;
   /** Dream data (M3); absent in older bundles. */
   dream: DreamFile | null;
+  /** Waypoints from a rider's own file (D24): private, shown, never counted. */
+  userPlaces: UserPlace[];
 }
 
 export interface PlacesResponse {
@@ -105,21 +109,37 @@ async function getOptional<T>(url: string): Promise<T | null> {
 
 export const listRoutes = () => get<{ routes: RouteListing[] }>("/v1/routes").then((r) => r.routes);
 
+/** One route's manifest, or null when it doesn't exist (e.g. a private route that was forgotten). */
+export const loadManifest = (network: string, ref: string) =>
+  getOptional<BundleManifest>(`/v1/routes/${network}/${ref.toLowerCase()}`);
+
+export const listingOf = (m: BundleManifest): RouteListing => ({
+  route: m.route,
+  run_id: m.run_id,
+  created_at: m.created_at,
+  summary: m.summary,
+  finding_counts: m.finding_counts,
+});
+
 export async function loadBundle(network: string, ref: string): Promise<RouteBundle> {
   const base = `/v1/routes/${network}/${ref.toLowerCase()}`;
-  const [manifest, path, sections, findings, profile, events, minor, scores, services, dream] = await Promise.all([
-    get<BundleManifest>(base),
+  const manifest = await get<BundleManifest>(base);
+  // Only the files this bundle has: optional ones (newer milestones, user places) are listed in its manifest.
+  const optional = <T>(file: string) => (file in manifest.files ? getOptional<T>(`${base}/${file}`) : Promise.resolve(null));
+  const [path, sections, findings, profile, events, minor, scores, services, dream, user] = await Promise.all([
     get<PathCollection>(`${base}/path`),
     get<SectionsFile>(`${base}/sections`),
     get<FindingsFile>(`${base}/findings`),
     get<ProfileFile>(`${base}/profile`),
-    getOptional<EventsFile>(`${base}/events`),
-    getOptional<MinorFile>(`${base}/minor`),
-    getOptional<ScoresFile>(`${base}/scores`),
-    getOptional<ServicesFile>(`${base}/services`),
-    getOptional<DreamFile>(`${base}/dream`),
+    optional<EventsFile>("events"),
+    optional<MinorFile>("minor"),
+    optional<ScoresFile>("scores"),
+    optional<ServicesFile>("services"),
+    optional<DreamFile>("dream"),
+    optional<UserPlacesFile>("user_places"),
   ]);
-  return { manifest, path, sections, findings, profile, events, minor, scores, services, dream };
+  const userPlaces = user?.places ?? [];
+  return { manifest, path, sections, findings, profile, events, minor, scores, services, dream, userPlaces };
 }
 
 export async function loadPlaces(

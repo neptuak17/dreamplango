@@ -56,6 +56,14 @@ beforeAll(() => {
     ],
   };
   writeFileSync(join(routeDir, RUN, "places.json"), JSON.stringify(places));
+
+  // A rider's own route: stored apart, never listed (D25)
+  const own = join(dataDir, "bundles", "private", "user", "u0123456789");
+  mkdirSync(join(own, RUN), { recursive: true });
+  writeFileSync(join(own, "current.json"), JSON.stringify({ run_id: RUN, updated_at: "2026-10-14T12:00:00Z" }));
+  const ownManifest = { ...manifest, visibility: "private", route: { ...manifest.route, id: "user:u0123456789", network: "user", ref: "u0123456789", name: "Pyrenees" } };
+  writeFileSync(join(own, RUN, "manifest.json"), JSON.stringify(ownManifest));
+  writeFileSync(join(own, RUN, "user_places.json"), JSON.stringify({ places: [] }));
 });
 
 afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -69,6 +77,20 @@ describe("api v1", () => {
     const body = (await res.json()) as { routes: { route: { id: string }; run_id: string }[] };
     expect(body.routes.map((r) => r.route.id)).toEqual(["eurovelo:ev8"]);
     expect(body.routes[0]?.run_id).toBe(RUN);
+  });
+
+  it("never lists a private route, but serves it by id without shared caching", async () => {
+    const body = (await (await app().request("/v1/routes")).json()) as { routes: { route: { id: string } }[] };
+    expect(body.routes.map((r) => r.route.id)).not.toContain("user:u0123456789");
+    const res = await app().request("/v1/routes/user/u0123456789");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { visibility: string }).visibility).toBe("private");
+    expect(res.headers.get("cache-control")).toBe("private, no-cache");
+    expect((await app().request(`/v1/routes/user/u0123456789/user_places?run=${RUN}`)).headers.get("cache-control")).toBe(
+      "private, max-age=31536000, immutable",
+    );
+    expect((await app().request("/v1/routes/eurovelo/ev8")).headers.get("cache-control")).toBe("public, no-cache");
+    expect((await app().request("/v1/routes/private/user")).status).toBe(400);
   });
 
   it("serves bundle files with content type and etag", async () => {

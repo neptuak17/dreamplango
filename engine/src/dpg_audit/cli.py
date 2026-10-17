@@ -1,34 +1,39 @@
 """`dpg` command line."""
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
 import typer
 
+from dpg_audit import networks
 from dpg_audit.build import assemble
-from dpg_audit.bundle import write_bundle
+from dpg_audit.bundle import bundle_dir, write_bundle
 from dpg_audit.config import REPO_ROOT, data_dir, work_dir
 from dpg_audit.contracts import bundle_schema
 from dpg_audit.corridor import corridor, write_geojson
 from dpg_audit.ingest.gpx import read_tracks
 from dpg_audit.lrs import MeasuredLine
 from dpg_audit.lrs.geodesy import distance
-from dpg_audit.networks import eurovelo
+from dpg_audit.networks import eurovelo, user
 from dpg_audit.sources import osm
 
 app = typer.Typer(help="DreamPlanGo Route Audit Engine", no_args_is_help=True)
 
 
-def _check_network(network: str) -> None:
-    if network != eurovelo.NETWORK:
-        raise typer.BadParameter(f"unsupported network {network!r} (supported: {eurovelo.NETWORK})")
+def _source(network: str) -> networks.RouteSource:
+    try:
+        return networks.get(network)
+    except ValueError as err:
+        raise typer.BadParameter(str(err)) from None
 
 
 @app.command()
 def fetch(network: str, ref: str) -> None:
     """Download the official route GPX, e.g. `dpg fetch eurovelo EV8`."""
-    _check_network(network)
+    if network != eurovelo.NETWORK:
+        raise typer.BadParameter("fetch downloads network routes; a rider's own file goes in with `add-route`")
     snap = eurovelo.fetch(ref, data_dir())
     typer.echo(f"saved {snap.file} ({snap.bytes:,} bytes, sha256 {snap.sha256[:12]}…)")
 
@@ -40,12 +45,11 @@ def ingest(
     snapshot: str = typer.Option(None, help="Snapshot date (YYYY-MM-DD); default: latest"),
 ) -> None:
     """Build an Audit Bundle (v0) from the latest downloaded snapshot, e.g. `dpg ingest eurovelo EV8`."""
-    _check_network(network)
+    src = _source(network)
     root = data_dir()
-    snap = eurovelo.latest_snapshot(ref, root, snapshot)
-    tracks = eurovelo.load_tracks(root / snap.file)
-    build = assemble(eurovelo.route_for(ref), tracks)
-    run_id, out = write_bundle(build, [snap], root)
+    snap = src.snapshot(ref, root, snapshot)
+    build = assemble(src.route(ref, root), src.tracks(snap, root))
+    run_id, out = write_bundle(build, [snap], root, private=src.private)
     s = build.summary()
     typer.echo(
         f"{build.route.name}: {s.daily_section_count} daily sections, {s.ride_length_m / 1000:,.0f} km, "
@@ -60,10 +64,94 @@ def ingest(
 
 
 def _load_build(network: str, ref: str, snapshot: str | None):
-    _check_network(network)
+    src = _source(network)
     root = data_dir()
-    snap = eurovelo.latest_snapshot(ref, root, snapshot)
-    return root, snap, assemble(eurovelo.route_for(ref), eurovelo.load_tracks(root / snap.file))
+    snap = src.snapshot(ref, root, snapshot)
+    return root, snap, assemble(src.route(ref, root), src.tracks(snap, root))
+
+
+@app.command("add-route")
+def add_route(
+    file: Path = typer.Argument(..., exists=True, dir_okay=False, help="The rider's GPX file"),
+    name: str = typer.Option(None, help="Name to show; default: the file's own name"),
+    quiet: bool = typer.Option(False, help="Print only the route id"),
+) -> None:
+    """Register a rider's own route file as a private route (D39) and print its id."""
+    snap = user.register(file, data_dir(), name)
+    ref = user.route_id(file.read_bytes())
+    if quiet:
+        typer.echo(ref)
+        return
+    typer.echo(f"{snap.title}: private route user/{ref} ({snap.bytes:,} bytes)")
+
+
+@app.command()
+def forget(
+    network: str,
+    ref: str,
+    yes: bool = typer.Option(False, "--yes", help="Don't ask for confirmation"),
+) -> None:
+    """Delete everything kept for a private route (D39): its file, bundles, work files and routing tiles.
+
+    Shared caches kept by area, not by route (D25), stay: OSM country extracts, elevation tiles, ERA5 grid points,
+    holidays and tourism by country."""
+    src = _source(network)
+    if not src.private:
+        raise typer.BadParameter(f"{network} routes are public; only private routes can be forgotten")
+    try:
+        ref = user.check_id(ref)
+    except ValueError as err:
+        raise typer.BadParameter(str(err)) from None
+    root = data_dir()
+    targets = [
+        user.raw_dir(root, ref),
+        bundle_dir(root, network, ref, private=True),
+        work_dir(root, network, ref),
+        root / "valhalla" / f"{network}-{ref}",
+    ]
+    # Every folder deleted is named after this one route: never a parent holding other routes.
+    if any(ref not in p.name for p in targets):
+        raise typer.BadParameter(f"refusing to delete folders not named after {ref}")
+    present = [p for p in targets if p.exists()]
+    if not present:
+        typer.echo(f"nothing kept for {network}/{ref}")
+        return
+    for p in present:
+        typer.echo(f"  {p}")
+    if not yes and not typer.confirm(f"Delete these {len(present)} folders for {network}/{ref}?"):
+        raise typer.Abort()
+    for p in present:
+        shutil.rmtree(p)
+    typer.echo(f"forgot {network}/{ref}")
+
+
+@app.command("tiles-for")
+def tiles_for(
+    network: str,
+    ref: str,
+    buffer_km: float = typer.Option(15.0, help="Corridor half-width the audit needs"),
+) -> None:
+    """Print the network and ref whose routing tiles can serve this route: a public route whose corridor contains
+    this route's corridor, else the route itself."""
+    import shapely
+    from shapely.geometry import shape
+
+    root, _, build = _load_build(network, ref, None)
+    # 1 km less than the audit needs, to allow for the simplification of both corridors' outlines
+    need = corridor(build.lines, (buffer_km - 1) * 1000)
+    for path in sorted((root / "work").glob("*/*/corridor.geojson")):
+        other_network, other_ref = path.parts[-3], path.parts[-2]
+        if (other_network, other_ref) == (network, ref.lower()) or _source(other_network).private:
+            continue
+        tiles = root / "valhalla" / f"{other_network}-{other_ref}"
+        if not tiles.exists():
+            continue
+        feats = json.loads(path.read_text(encoding="utf-8"))["features"]
+        have = shapely.union_all([shape(f["geometry"]) for f in feats])
+        if have.contains(need):
+            typer.echo(f"{other_network} {other_ref}")
+            return
+    typer.echo(f"{network} {ref.lower()}")
 
 
 @app.command("osm-prepare")
@@ -129,7 +217,7 @@ def audit(
     dream: str = typer.Option("dream-v0", help="Dream profile in engine/profiles/"),
 ) -> None:
     """Full audit: map matching, layers, gaps, terrain, services and access, ECS-style rules -> new bundle."""
-    _check_network(network)
+    _source(network)
     from dpg_audit import audit as audit_mod  # heavy imports (osmium, rasterio) only when auditing
 
     result = audit_mod.run(

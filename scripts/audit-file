@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Audit a rider's own route file end to end, as a private route (M3.5, D39). From Windows:
+#
+#   npm run audit:file -- <file.gpx> [--name "Route name"]
+#
+# 1. registers the file as a private route, user/<id> (the id comes from the file's contents)
+# 2. builds its corridor and cuts the OSM country extracts to it
+# 3. starts Valhalla on tiles for that corridor, or on a public route's tiles that already cover it
+# 4. runs the full audit into a private bundle
+# 5. puts back the Valhalla that was running before, and prints the viewer link
+#
+# Delete the route and everything kept for it with: npm run forget -- <id>
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DPG="$REPO/scripts/dpg"
+VALHALLA="$REPO/scripts/valhalla"
+PORT="${VALHALLA_PORT:-8002}"
+
+[ $# -ge 1 ] || { echo 'usage: npm run audit:file -- <file.gpx> [--name "Route name"]' >&2; exit 2; }
+FILE="$1"
+shift
+case "$FILE" in [A-Za-z]:\\* | [A-Za-z]:/*) FILE="$(wslpath -u "$FILE")" ;; esac
+[ -f "$FILE" ] || { echo "no such file: $FILE" >&2; exit 1; }
+
+# Valhalla projects currently up, as "<network> <ref>" (project names are dpg-valhalla-<network>-<ref>)
+running() {
+  docker ps --format '{{.Label "com.docker.compose.project"}}' | sed -n 's/^dpg-valhalla-\([a-z0-9]*\)-\(.*\)$/\1 \2/p' | sort -u
+}
+
+wait_ready() {
+  printf 'waiting for Valhalla (a first start builds tiles, which can take a while) '
+  for _ in $(seq 1 720); do
+    if curl -sf "http://127.0.0.1:$PORT/status" >/dev/null; then
+      echo ' ready'
+      return 0
+    fi
+    printf .
+    sleep 5
+  done
+  echo ' timed out after an hour' >&2
+  return 1
+}
+
+ID="$("$DPG" add-route "$FILE" --quiet "$@")"
+[[ "$ID" =~ ^u[0-9a-f]{10}$ ]] || { echo "registering the file gave no route id ('$ID')" >&2; exit 1; }
+echo "private route user/$ID"
+"$DPG" osm-prepare user "$ID"
+
+mapfile -t PREVIOUS < <(running)
+read -r TNET TREF < <("$DPG" tiles-for user "$ID")
+SWITCHED=0
+restore() {
+  [ "$SWITCHED" = 1 ] || return 0
+  echo "restoring the Valhalla that was running before …"
+  "$VALHALLA" down "$TNET" "$TREF" >/dev/null 2>&1 || true
+  for p in "${PREVIOUS[@]}"; do
+    # shellcheck disable=SC2086
+    "$VALHALLA" up $p
+  done
+}
+trap restore EXIT
+
+if [ "${#PREVIOUS[@]}" -ne 1 ] || [ "${PREVIOUS[0]}" != "$TNET $TREF" ]; then
+  [ "$TNET" = user ] && echo "routing tiles: this route's own corridor" || echo "routing tiles: $TNET/$TREF (covers this route)"
+  for p in "${PREVIOUS[@]}"; do
+    # shellcheck disable=SC2086
+    "$VALHALLA" down $p
+  done
+  SWITCHED=1
+  "$VALHALLA" up "$TNET" "$TREF"
+fi
+wait_ready
+
+"$DPG" audit user "$ID"
+echo
+echo "Done. Open the private route in the viewer (npm run dev): http://localhost:5173/?route=user/$ID"

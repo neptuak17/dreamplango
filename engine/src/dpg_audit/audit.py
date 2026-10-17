@@ -8,19 +8,20 @@ from pathlib import Path
 
 import numpy as np
 
-from dpg_audit import __version__
+from dpg_audit import __version__, networks
+from dpg_audit import overlap as overlap_mod
 from dpg_audit.build import assemble
 from dpg_audit.bundle import PROFILE_STEP_M, write_bundle
 from dpg_audit.config import work_dir
 from dpg_audit.dream.pipeline import build_dream
 from dpg_audit.dream.profile import load_dream
+from dpg_audit.dream.themes import read_settlements
 from dpg_audit.layers import classify, elevation
 from dpg_audit.layers.events import build_matched_layers
 from dpg_audit.layers.gaps import classify_gaps
 from dpg_audit.match.matcher import match_lines
 from dpg_audit.match.valhalla import Valhalla
 from dpg_audit.models import EventsFile, Licence, ProfileFile, ScoresFile, SourceSnapshot
-from dpg_audit.networks import eurovelo
 from dpg_audit.osmdata import load as load_osm
 from dpg_audit.rules.evaluate import evaluate, section_scores, stretch_stats
 from dpg_audit.rules.findings import gap_findings, rule_findings, to_findings
@@ -30,7 +31,7 @@ from dpg_audit.services.pipeline import build_places, services_file
 from dpg_audit.services.profile import load_services
 from dpg_audit.sources import dem
 
-PIPELINE = "dpg-audit/m3-dream"
+PIPELINE = "dpg-audit/m3.5-user-routes"
 
 
 @dataclass
@@ -59,14 +60,16 @@ def run(
 ) -> AuditResult:
     t: dict[str, float] = {}
     t0 = time.perf_counter()
-    snap = eurovelo.latest_snapshot(ref, root, snapshot)
-    build = assemble(eurovelo.route_for(ref), eurovelo.load_tracks(root / snap.file))
+    src = networks.get(network)
+    snap = src.snapshot(ref, root, snapshot)
     rules = load_rules(rules_name)
     route_cfg = load_route_config(network, ref)
     wd = work_dir(root, network, ref)
     pbf = wd / "osm" / "corridor.osm.pbf"
     if not pbf.exists():
         raise FileNotFoundError(f"{pbf} missing: run `dpg osm-prepare {network} {ref}` first")
+    # Stages of a rider's own file are named after the towns at their ends (D40).
+    build = assemble(src.route(ref, root), src.tracks(snap, root, read_settlements(pbf, wd / "dream")))
     osm_sources = [SourceSnapshot.model_validate(s) for s in json.loads((wd / "osm" / "sources.json").read_text())]
 
     client = Valhalla(valhalla_url)
@@ -79,7 +82,7 @@ def run(
     way_ids = {p.edge["way_id"] for m in matches for p in m.pieces if p.edge and "way_id" in p.edge}
     _log(f"reading OSM tags for {len(way_ids):,} matched ways …")
     osm = load_osm(pbf, way_ids, wd / "osm")
-    ev_number = classify.eurovelo_number(build.route.ref)
+    ev_number = classify.eurovelo_number(build.route.ref) if src.eurovelo else None
     matched = build_matched_layers(build.path, matches, osm, ev_number)
     notes = classify_gaps(build.components, osm.ferries, osm.stations, route_cfg.gaps)
     t["layers"] = time.perf_counter() - t0 - sum(t.values())
@@ -125,8 +128,8 @@ def run(
     kept = [f.model_dump() for f in build.findings if f.rule_id != "source.gap_between_sections"]
     findings = to_findings(
         kept
-        + gap_findings(build.components, notes)
-        + rule_findings(rules, build.path, events, climbs, build.daily, scores.sections, matches)
+        + gap_findings(build.components, notes, eurovelo=src.eurovelo)
+        + rule_findings(rules, build.path, events, climbs, build.daily, scores.sections, matches, src.eurovelo)
         + coverage.findings(services.coverage, build.path.locate)
     )
     svc_file = services_file(services, build, svc_profile)
@@ -177,6 +180,11 @@ def run(
         attribution="Map matching and routing by Valhalla (MIT)",
     )
     sources = [snap, *osm_sources, *services.sources, dem.snapshot(root, len(tiles)), *dream.sources, valhalla_source]
+    ways = overlap_mod.ways_file(build, matches)
+    waypoints = src.waypoints(snap, root)
+    shared = overlap_mod.overlap(ways, build.path.length, root, exclude=build.route.id) if src.private else []
+    for o in shared:
+        _log(f"overlap: {o.shared_m / 1000:,.1f} km ({o.share:.0%}) follows {o.name}")
     run_id, out = write_bundle(
         build,
         sources,
@@ -190,6 +198,10 @@ def run(
         places=services.file,
         services=svc_file,
         dream=dream.file,
+        ways=ways,
+        user_places=overlap_mod.user_places(build, waypoints) if waypoints else None,
+        overlap=shared,
+        private=src.private,
     )
     t["rules+write"] = time.perf_counter() - t0 - sum(t.values())
     _log(

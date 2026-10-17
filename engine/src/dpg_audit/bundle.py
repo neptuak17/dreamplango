@@ -2,6 +2,7 @@
 
 Layout: <data>/bundles/<network>/<ref>/<run_id>/<files>
         <data>/bundles/<network>/<ref>/current.json
+Private audits (a rider's own route, D25) live apart, under <data>/bundles/private/<network>/<ref>/.
 
 A geometry-only bundle (`dpg ingest`) has manifest, path, sections, findings and profile. A full audit (`dpg audit`)
 adds events (layers), minor (1 km criteria), scores, places, services and dream (M3).
@@ -32,10 +33,13 @@ from dpg_audit.models import (
     PipelineInfo,
     PlacesFile,
     ProfileFile,
+    RouteOverlap,
     ScoresFile,
     SectionsFile,
     ServicesFile,
     SourceSnapshot,
+    UserPlacesFile,
+    WaysFile,
 )
 
 FILE_NAMES = {
@@ -50,6 +54,8 @@ FILE_NAMES = {
     "places": "places.json",
     "services": "services.json",
     "dream": "dream.json",
+    "ways": "ways.json",
+    "user_places": "user_places.json",
 }
 BLOCK_SIZE_M = 50_000.0
 MINOR_SIZE_M = 1_000.0
@@ -119,6 +125,11 @@ def _write_json(path: Path, payload) -> None:
     os.replace(tmp, path)
 
 
+def bundle_dir(data_dir: Path, network: str, ref: str, private: bool = False) -> Path:
+    base = data_dir / "bundles" / ("private" if private else "")
+    return base / network / ref.lower()
+
+
 def write_bundle(
     build: RouteBuild,
     sources: list[SourceSnapshot],
@@ -133,13 +144,17 @@ def write_bundle(
     places: PlacesFile | None = None,
     services: ServicesFile | None = None,
     dream: DreamFile | None = None,
+    ways: WaysFile | None = None,
+    user_places: UserPlacesFile | None = None,
+    overlap: list[RouteOverlap] | None = None,
+    private: bool = False,
 ) -> tuple[str, Path]:
     created = datetime.now(UTC)
     digest = hashlib.sha256("|".join([__version__, pipeline, *sorted(s.sha256 for s in sources)]).encode()).hexdigest()[
         :10
     ]
     run_id = f"{created:%Y%m%dT%H%M%SZ}_{digest}"
-    route_dir = data_dir / "bundles" / build.route.network / build.route.ref.lower()
+    route_dir = bundle_dir(data_dir, build.route.network, build.route.ref, private)
     out = route_dir / run_id
     out.mkdir(parents=True, exist_ok=False)
 
@@ -162,6 +177,8 @@ def write_bundle(
         "places": places,
         "services": services,
         "dream": dream,
+        "ways": ways,
+        "user_places": user_places,
     }
     files = {"manifest": FILE_NAMES["manifest"]}
     for name, payload in payloads.items():
@@ -178,6 +195,8 @@ def write_bundle(
         files=files,
         summary=build.summary(),
         finding_counts=dict(Counter(f.severity.value for f in findings)),
+        visibility="private" if private else "public",
+        overlap=overlap or [],
     )
     _write_json(out / FILE_NAMES["manifest"], manifest)
     _write_json(route_dir / "current.json", CurrentPointer(run_id=run_id, updated_at=created))

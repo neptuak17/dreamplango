@@ -71,8 +71,47 @@ def nearest_point(points: list[ClimatePoint], lon: float, lat: float) -> tuple[i
     return i, float(dists[i])
 
 
+GRID_DEG = 0.25
+"""ERA5's grid. Requests and the cache use grid cells, so a series fetched for one route serves any route nearby,
+and the cache is kept by area, never by a route's line (D25)."""
+
+
+def grid_cell(lon: float, lat: float) -> tuple[float, float]:
+    return round(lon / GRID_DEG) * GRID_DEG, round(lat / GRID_DEG) * GRID_DEG
+
+
+def _cell_path(cache: Path, cell: tuple[float, float], years: tuple[int, int]) -> Path:
+    lon, lat = cell
+    return cache / f"era5ts_g{lat:.2f}_{lon:.2f}_{years[0]}-{years[1]}.zip"
+
+
 def _cache_path(cache: Path, p: ClimatePoint, years: tuple[int, int]) -> Path:
-    return cache / f"era5ts_{p.lat:.2f}_{p.lon:.2f}_{years[0]}-{years[1]}.zip"
+    return _cell_path(cache, grid_cell(p.lon, p.lat), years)
+
+
+def _grid_of(zip_path: Path) -> tuple[float, float] | None:
+    with zipfile.ZipFile(zip_path) as z:
+        name = next((n for n in z.namelist() if n.endswith(".csv")), None)
+        if name is None:
+            return None
+        with z.open(name) as f:
+            row = next(csv.DictReader(io.TextIOWrapper(f, encoding="utf-8")), None)
+    return None if row is None else (float(row["longitude"]), float(row["latitude"]))
+
+
+def reindex(cache: Path, years: tuple[int, int]) -> int:
+    """Rename downloads cached under a route point's own coordinates (before M3.5) to their ERA5 grid cell, read from
+    the file itself, so nothing is fetched twice. Returns how many were renamed."""
+    moved = 0
+    for old in sorted(cache.glob(f"era5ts_[0-9-]*_{years[0]}-{years[1]}.zip")):
+        cell = _grid_of(old)
+        if cell is None:
+            continue
+        new = _cell_path(cache, cell, years)
+        if not new.exists():
+            old.replace(new)
+            moved += 1
+    return moved
 
 
 def fetch_point(p: ClimatePoint, years: tuple[int, int], cache: Path, retries: int = 2) -> Path:
@@ -82,9 +121,10 @@ def fetch_point(p: ClimatePoint, years: tuple[int, int], cache: Path, retries: i
     if target.exists() and target.stat().st_size > 0:
         return target
     cache.mkdir(parents=True, exist_ok=True)
+    lon, lat = grid_cell(p.lon, p.lat)
     request = {
         "variable": VARIABLES,
-        "location": {"longitude": round(p.lon, 2), "latitude": round(p.lat, 2)},
+        "location": {"longitude": lon, "latitude": lat},
         "date": [f"{years[0]}-01-01/{years[1]}-12-31"],
         "data_format": "csv",
     }
@@ -140,10 +180,16 @@ def fetch_all(
     workers: int,
     log: Callable[[str], None] = print,
 ) -> tuple[list[Daily | None], list[Path]]:
-    """Daily series per point (None where the request failed), and the cached files used."""
-    todo = sum(not _cache_path(cache, p, years).exists() for p in points)
+    """Daily series per point (None where the request failed), and the cached files used. Points in the same grid
+    cell share one request."""
+    if cache.exists() and (moved := reindex(cache, years)):
+        log(f"ERA5: {moved} cached series re-indexed by grid cell")
+    cells: dict[tuple[float, float], ClimatePoint] = {}
+    for p in points:
+        cells.setdefault(grid_cell(p.lon, p.lat), p)
+    todo = sum(not _cell_path(cache, c, years).exists() for c in cells)
     if todo:
-        log(f"ERA5: requesting {todo} of {len(points)} climate points from the CDS ({workers} at a time) …")
+        log(f"ERA5: requesting {todo} of {len(cells)} grid cells from the CDS ({workers} at a time) …")
 
     def one(p: ClimatePoint) -> tuple[Daily | None, Path | None]:
         try:
@@ -154,8 +200,9 @@ def fetch_all(
             return None, None
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        results = list(pool.map(one, points))
-    return [d for d, _ in results], [p for _, p in results if p is not None]
+        by_cell = dict(zip(cells, pool.map(one, cells.values()), strict=True))
+    results = [by_cell[grid_cell(p.lon, p.lat)] for p in points]
+    return [d for d, _ in results], list(dict.fromkeys(f for _, f in results if f is not None))
 
 
 def _per_month(values: np.ndarray, month: np.ndarray) -> list[float | None]:

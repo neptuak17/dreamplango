@@ -3,7 +3,7 @@
     "BundleManifest": {
       "properties": {
         "schema_version": {
-          "default": "0.4",
+          "default": "0.5",
           "type": "string"
         },
         "run_id": {
@@ -47,6 +47,22 @@
           },
           "description": "Count per severity",
           "type": "object"
+        },
+        "visibility": {
+          "default": "public",
+          "description": "Private: a rider's own route; never listed, never shared (D25)",
+          "enum": [
+            "public",
+            "private"
+          ],
+          "type": "string"
+        },
+        "overlap": {
+          "description": "Length shared with audited public routes (D40), where there is any",
+          "items": {
+            "$ref": "#/$defs/RouteOverlap"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -59,7 +75,9 @@
         "attribution",
         "files",
         "summary",
-        "finding_counts"
+        "finding_counts",
+        "visibility",
+        "overlap"
       ],
       "type": "object",
       "title": "BundleManifest"
@@ -709,7 +727,8 @@
         "developed",
         "partially_developed",
         "undeveloped_unknown",
-        "unrecognised"
+        "unrecognised",
+        "not_rated"
       ],
       "type": "string",
       "title": "DevelopmentLevel"
@@ -1328,14 +1347,22 @@
     "Licence": {
       "properties": {
         "id": {
-          "description": "SPDX-style identifier, e.g. ODbL-1.0",
+          "description": "SPDX-style identifier, e.g. ODbL-1.0; 'unknown' for a rider's own file (D25)",
           "type": "string"
         },
         "name": {
           "type": "string"
         },
         "url": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1751,6 +1778,58 @@
       ],
       "type": "object",
       "title": "RouteBreak"
+    },
+    "RouteOverlap": {
+      "properties": {
+        "route_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "shared_m": {
+          "description": "Length of this route on OSM ways the other route also follows",
+          "type": "number"
+        },
+        "share": {
+          "description": "shared_m as a share of this route's length (0-1)",
+          "type": "number"
+        },
+        "sections": {
+          "description": "The other route's daily sections involved, as ranges",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "items": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "route_id",
+        "name",
+        "network",
+        "ref",
+        "shared_m",
+        "share",
+        "sections"
+      ],
+      "type": "object",
+      "title": "RouteOverlap"
     },
     "RouteSummary": {
       "properties": {
@@ -2204,7 +2283,16 @@
           "type": "string"
         },
         "url": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where it was downloaded; none for a rider's own file"
         },
         "retrieved_at": {
           "format": "date-time",
@@ -2432,6 +2520,133 @@
       ],
       "type": "object",
       "title": "ThemeScore"
+    },
+    "UserPlace": {
+      "description": "A waypoint from the rider's own file (D24): private to that route, shown but never counted (D40).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "description": "From the file's <type> or <sym>; 'waypoint' when it has neither",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The file's comment and description, if any"
+        },
+        "lon": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "ele": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "at_m": {
+          "description": "Measure of the closest route point",
+          "type": "number"
+        },
+        "offset_m": {
+          "description": "Straight-line distance from the route",
+          "type": "number"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Daily section at at_m"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "note",
+        "lon",
+        "lat",
+        "ele",
+        "at_m",
+        "offset_m",
+        "section"
+      ],
+      "type": "object",
+      "title": "UserPlace"
+    },
+    "UserPlacesFile": {
+      "properties": {
+        "places": {
+          "items": {
+            "$ref": "#/$defs/UserPlace"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "places"
+      ],
+      "type": "object",
+      "title": "UserPlacesFile"
+    },
+    "WaysFile": {
+      "description": "The OSM ways a route is matched to, for overlap between routes (D23, D40).",
+      "properties": {
+        "ways": {
+          "description": "[way id, daily section number, matched length (m)]",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array",
+            "items": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ways"
+      ],
+      "type": "object",
+      "title": "WaysFile"
     }
   },
   "description": "Root type used only to export one JSON Schema containing every bundle file type.",
@@ -2466,6 +2681,12 @@
     "dream": {
       "$ref": "#/$defs/DreamFile"
     },
+    "ways": {
+      "$ref": "#/$defs/WaysFile"
+    },
+    "user_places": {
+      "$ref": "#/$defs/UserPlacesFile"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointer"
     }
@@ -2481,6 +2702,8 @@
     "places",
     "services",
     "dream",
+    "ways",
+    "user_places",
     "current"
   ],
   "type": "object",

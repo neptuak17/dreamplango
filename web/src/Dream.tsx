@@ -121,9 +121,11 @@ function format(metric: Metric, v: number | null): string {
 function stretchName(daily: Map<number, DailySection>, first: number, last: number, way: "forward" | "reverse") {
   const a = daily.get(first);
   const b = daily.get(last);
-  const from = way === "forward" ? a?.start_name : b?.end_name;
-  const to = way === "forward" ? b?.end_name : a?.start_name;
-  return `${from ?? `section ${first}`} → ${to ?? `section ${last}`}`;
+  // Each end in the direction of travel; an end with no town is given by its km.
+  const start = way === "forward" ? { name: a?.start_name, m: a?.from_m } : { name: b?.end_name, m: b?.to_m };
+  const end = way === "forward" ? { name: b?.end_name, m: b?.to_m } : { name: a?.start_name, m: a?.from_m };
+  const label = (e: { name?: string | null; m?: number }) => e.name ?? (e.m === undefined ? "?" : `km ${km(e.m)}`);
+  return `${label(start)} → ${label(end)}`;
 }
 
 /** Facts for one section or a stretch; ends with what the rider should check themselves (D37). */

@@ -1,7 +1,7 @@
 /* Generated from schemas/bundle-v0.schema.json by `npm run contracts`. Do not edit. */
 
 export type DevelopmentLevel =
-  "certified" | "developed" | "partially_developed" | "undeveloped_unknown" | "unrecognised";
+  "certified" | "developed" | "partially_developed" | "undeveloped_unknown" | "unrecognised" | "not_rated";
 export type Signage = "signed" | "not_signed" | "unknown";
 export type ComponentKind = "ride" | "gap";
 export type GapType = "ferry" | "public_transport" | "discontinuity" | "missing" | "unclassified";
@@ -21,6 +21,8 @@ export interface BundleContract {
   places: PlacesFile;
   services: ServicesFile;
   dream: DreamFile;
+  ways: WaysFile;
+  user_places: UserPlacesFile;
   current: CurrentPointer;
 }
 export interface BundleManifest {
@@ -44,6 +46,14 @@ export interface BundleManifest {
   finding_counts: {
     [k: string]: number;
   };
+  /**
+   * Private: a rider's own route; never listed, never shared (D25)
+   */
+  visibility: "public" | "private";
+  /**
+   * Length shared with audited public routes (D40), where there is any
+   */
+  overlap: RouteOverlap[];
 }
 export interface PipelineInfo {
   name: string;
@@ -71,7 +81,10 @@ export interface SourceSnapshot {
    */
   id: string;
   title: string;
-  url: string;
+  /**
+   * Where it was downloaded; none for a rider's own file
+   */
+  url: string | null;
   retrieved_at: string;
   /**
    * Path relative to the data directory
@@ -84,11 +97,11 @@ export interface SourceSnapshot {
 }
 export interface Licence {
   /**
-   * SPDX-style identifier, e.g. ODbL-1.0
+   * SPDX-style identifier, e.g. ODbL-1.0; 'unknown' for a rider's own file (D25)
    */
   id: string;
   name: string;
-  url: string;
+  url: string | null;
 }
 export interface RouteSummary {
   ride_length_m: number;
@@ -105,6 +118,24 @@ export interface StatusShare {
    * Fraction of ridden length, 0-1
    */
   share: number;
+}
+export interface RouteOverlap {
+  route_id: string;
+  name: string;
+  network: string;
+  ref: string;
+  /**
+   * Length of this route on OSM ways the other route also follows
+   */
+  shared_m: number;
+  /**
+   * shared_m as a share of this route's length (0-1)
+   */
+  share: number;
+  /**
+   * The other route's daily sections involved, as ranges
+   */
+  sections: [number, number][];
 }
 export interface SectionsFile {
   daily: DailySection[];
@@ -776,6 +807,48 @@ export interface RouteBreak {
    * A stretch may not continue across this break
    */
   hard: boolean;
+}
+/**
+ * The OSM ways a route is matched to, for overlap between routes (D23, D40).
+ */
+export interface WaysFile {
+  /**
+   * [way id, daily section number, matched length (m)]
+   */
+  ways: [number, number, number][];
+}
+export interface UserPlacesFile {
+  places: UserPlace[];
+}
+/**
+ * A waypoint from the rider's own file (D24): private to that route, shown but never counted (D40).
+ */
+export interface UserPlace {
+  id: string;
+  name: string | null;
+  /**
+   * From the file's <type> or <sym>; 'waypoint' when it has neither
+   */
+  kind: string;
+  /**
+   * The file's comment and description, if any
+   */
+  note: string | null;
+  lon: number;
+  lat: number;
+  ele: number | null;
+  /**
+   * Measure of the closest route point
+   */
+  at_m: number;
+  /**
+   * Straight-line distance from the route
+   */
+  offset_m: number;
+  /**
+   * Daily section at at_m
+   */
+  section: number | null;
 }
 export interface CurrentPointer {
   run_id: string;

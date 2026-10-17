@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { PlacesCache, filterPlaces, parsePlaceQuery } from "./places";
-import { type BundleFile, type BundleStore, readManifest } from "./store";
+import { type BundleFile, type BundleStore, PRIVATE_DIR, readManifest } from "./store";
 
 const NAME = /^[a-z0-9-]{1,32}$/;
 const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-f]{10}$/;
@@ -19,6 +19,7 @@ const CONTENT_TYPES: Record<BundleFile, string> = {
   places: "application/json",
   services: "application/json",
   dream: "application/json",
+  user_places: "application/json",
 };
 
 export function createApp(store: BundleStore) {
@@ -47,7 +48,7 @@ export function createApp(store: BundleStore) {
   async function resolveRun(c: Context): Promise<{ network: string; ref: string; runId: string } | Response> {
     const network = c.req.param("network") ?? "";
     const ref = c.req.param("ref") ?? "";
-    if (!NAME.test(network) || !NAME.test(ref)) return c.json({ error: "invalid route" }, 400);
+    if (!NAME.test(network) || !NAME.test(ref) || network === PRIVATE_DIR) return c.json({ error: "invalid route" }, 400);
     const requested = c.req.query("run");
     if (requested !== undefined && !RUN_ID.test(requested)) return c.json({ error: "invalid run id" }, 400);
     const runId = requested ?? (await store.currentRun(network, ref));
@@ -62,16 +63,18 @@ export function createApp(store: BundleStore) {
     if (body === null) return c.json({ error: `${file} not found` }, 404);
     const etag = `"${target.runId}-${file}"`;
     if (c.req.header("if-none-match") === etag) return c.body(null, 304);
+    // Current bundles change when a new audit is published; a specific ?run= never changes. A rider's own route is
+    // never kept by shared caches (D25).
+    const scope = (await store.isPrivate(target.network, target.ref)) ? "private" : "public";
     return c.body(body, 200, {
       "content-type": CONTENT_TYPES[file],
       etag,
-      // Current bundles change when a new audit is published; a specific ?run= never changes.
-      "cache-control": c.req.query("run") ? "public, max-age=31536000, immutable" : "no-cache",
+      "cache-control": c.req.query("run") ? `${scope}, max-age=31536000, immutable` : `${scope}, no-cache`,
     });
   };
 
   app.get("/v1/routes/:network/:ref", serve("manifest"));
-  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores", "services", "dream"] as const) {
+  for (const file of ["path", "sections", "findings", "profile", "events", "minor", "scores", "services", "dream", "user_places"] as const) {
     app.get(`/v1/routes/:network/:ref/${file}`, serve(file));
   }
 

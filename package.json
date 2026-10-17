@@ -15,6 +15,8 @@
     "ingest:ev8": "wsl -d Ubuntu-24.04 -- bash scripts/dpg ingest eurovelo EV8",
     "osm:ev8": "wsl -d Ubuntu-24.04 -- bash scripts/dpg osm-prepare eurovelo EV8",
     "audit:ev8": "wsl -d Ubuntu-24.04 -- bash scripts/dpg audit eurovelo EV8",
+    "audit:file": "wsl -d Ubuntu-24.04 -- bash scripts/audit-file",
+    "forget": "wsl -d Ubuntu-24.04 -- bash scripts/forget",
     "valhalla:up": "wsl -d Ubuntu-24.04 -- bash scripts/valhalla up eurovelo ev8",
     "valhalla:down": "wsl -d Ubuntu-24.04 -- bash scripts/valhalla down eurovelo ev8",
     "valhalla:status": "wsl -d Ubuntu-24.04 -- bash scripts/valhalla status",

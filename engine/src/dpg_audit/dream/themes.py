@@ -160,10 +160,30 @@ def read_features(theme_pbf: Path) -> Features:
     return f
 
 
-def read_places(corridor_pbf: Path, work: Path) -> list[tuple[float, float]]:
+@dataclass
+class Settlement:
+    lon: float
+    lat: float
+    name: str | None
+    kind: str
+    """OSM place=*: city, town or village."""
+
+
+def read_settlements(corridor_pbf: Path, work: Path) -> list[Settlement]:
+    """Cities, towns and villages in the corridor (the filtered extract is cached until the corridor changes)."""
+    work.mkdir(parents=True, exist_ok=True)
     small = work / "places-settlements.osm.pbf"
-    _osmium("tags-filter", "--overwrite", str(corridor_pbf), "n/place=city,town,village", "-o", str(small))
-    return [(o.lon, o.lat) for o in osmium.FileProcessor(str(small)) if o.is_node() and o.location.valid()]
+    if not (small.exists() and small.stat().st_mtime >= corridor_pbf.stat().st_mtime):
+        _osmium("tags-filter", "--overwrite", str(corridor_pbf), "n/place=city,town,village", "-o", str(small))
+    return [
+        Settlement(o.lon, o.lat, o.tags.get("name"), o.tags.get("place", "village"))
+        for o in osmium.FileProcessor(str(small))
+        if o.is_node() and o.location.valid()
+    ]
+
+
+def read_places(corridor_pbf: Path, work: Path) -> list[tuple[float, float]]:
+    return [(s.lon, s.lat) for s in read_settlements(corridor_pbf, work)]
 
 
 def prepare(corridor_pbf: Path, lines: list[MeasuredLine], work: Path) -> Path:

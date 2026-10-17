@@ -6,6 +6,7 @@ export const DEVELOPMENT: Record<DevelopmentLevel, { label: string; color: strin
   partially_developed: { label: "Partially developed", color: "#f08c00" },
   undeveloped_unknown: { label: "Undeveloped / unknown", color: "#868e96" },
   unrecognised: { label: "Unrecognised status", color: "#c2255c" },
+  not_rated: { label: "Not rated (own route)", color: "#868e96" },
 };
 
 export const SIGNAGE: Record<Signage, string> = {

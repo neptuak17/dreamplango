@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-BUNDLE_SCHEMA_VERSION = "0.4"
+BUNDLE_SCHEMA_VERSION = "0.5"
 
 LonLat = tuple[float, float]
 
@@ -21,9 +21,9 @@ class Model(BaseModel):
 
 
 class Licence(Model):
-    id: str = Field(description="SPDX-style identifier, e.g. ODbL-1.0")
+    id: str = Field(description="SPDX-style identifier, e.g. ODbL-1.0; 'unknown' for a rider's own file (D25)")
     name: str
-    url: str
+    url: str | None = None
 
 
 class SourceSnapshot(Model):
@@ -31,7 +31,7 @@ class SourceSnapshot(Model):
 
     id: str = Field(description="Source identifier, e.g. eurovelo-gpx")
     title: str
-    url: str
+    url: str | None = Field(None, description="Where it was downloaded; none for a rider's own file")
     retrieved_at: datetime
     file: str = Field(description="Path relative to the data directory")
     sha256: str
@@ -46,6 +46,8 @@ class DevelopmentLevel(StrEnum):
     PARTIALLY_DEVELOPED = "partially_developed"
     UNDEVELOPED_UNKNOWN = "undeveloped_unknown"
     UNRECOGNISED = "unrecognised"
+    NOT_RATED = "not_rated"
+    """Not a network route (e.g. a rider's own file, D40): no published development status."""
 
 
 class Signage(StrEnum):
@@ -171,6 +173,16 @@ class PipelineInfo(Model):
     version: str
 
 
+class RouteOverlap(Model):
+    route_id: str
+    name: str
+    network: str
+    ref: str
+    shared_m: float = Field(description="Length of this route on OSM ways the other route also follows")
+    share: float = Field(description="shared_m as a share of this route's length (0-1)")
+    sections: list[tuple[int, int]] = Field(description="The other route's daily sections involved, as ranges")
+
+
 class BundleManifest(Model):
     schema_version: str = BUNDLE_SCHEMA_VERSION
     run_id: str
@@ -182,6 +194,37 @@ class BundleManifest(Model):
     files: dict[str, str] = Field(description="Logical name -> file name within the bundle directory")
     summary: RouteSummary
     finding_counts: dict[str, int] = Field(description="Count per severity")
+    visibility: Literal["public", "private"] = Field(
+        "public", description="Private: a rider's own route; never listed, never shared (D25)"
+    )
+    overlap: list[RouteOverlap] = Field(
+        default_factory=list, description="Length shared with audited public routes (D40), where there is any"
+    )
+
+
+class WaysFile(Model):
+    """The OSM ways a route is matched to, for overlap between routes (D23, D40)."""
+
+    ways: list[tuple[int, int, float]] = Field(description="[way id, daily section number, matched length (m)]")
+
+
+class UserPlace(Model):
+    """A waypoint from the rider's own file (D24): private to that route, shown but never counted (D40)."""
+
+    id: str
+    name: str | None
+    kind: str = Field(description="From the file's <type> or <sym>; 'waypoint' when it has neither")
+    note: str | None = Field(description="The file's comment and description, if any")
+    lon: float
+    lat: float
+    ele: float | None
+    at_m: float = Field(description="Measure of the closest route point")
+    offset_m: float = Field(description="Straight-line distance from the route")
+    section: int | None = Field(description="Daily section at at_m")
+
+
+class UserPlacesFile(Model):
+    places: list[UserPlace]
 
 
 class SectionsFile(Model):
@@ -545,4 +588,6 @@ class BundleContract(Model):
     places: PlacesFile
     services: ServicesFile
     dream: DreamFile
+    ways: WaysFile
+    user_places: UserPlacesFile
     current: CurrentPointer

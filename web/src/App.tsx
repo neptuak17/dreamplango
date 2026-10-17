@@ -9,7 +9,7 @@ import type {
   StretchStats,
 } from "@dpg/contracts";
 import { useEffect, useMemo, useState } from "react";
-import { listRoutes, loadBundle, loadPlaces, type RouteBundle, type RouteListing } from "./api";
+import { listingOf, listRoutes, loadBundle, loadManifest, loadPlaces, type RouteBundle, type RouteListing } from "./api";
 import {
   ECS_LABELS,
   LAYER_TITLES,
@@ -57,6 +57,50 @@ const pct = (x: number | undefined) => `${Math.round((x ?? 0) * 100)}%`;
 function readHashSection(): number | null {
   const match = /section=(\d+)/.exec(window.location.hash);
   return match ? Number(match[1]) : null;
+}
+
+/** `?route=<network>/<ref>`: the route to open, e.g. a private one printed by `npm run audit:file`. */
+function readRouteParam(): string | null {
+  const v = new URLSearchParams(window.location.search).get("route");
+  return v && /^[a-z0-9-]+\/[a-z0-9-]+$/i.test(v) ? v.toLowerCase() : null;
+}
+
+const routeKey = (r: { network: string; ref: string }) => `${r.network}/${r.ref.toLowerCase()}`;
+
+// Private routes opened in this browser, for the route switcher. The API never lists them (D25); this list stays on
+// this device and is only a convenience, so a missing or blocked storage simply means an empty list.
+const PRIVATE_KEY = "dpg.privateRoutes";
+function readPrivate(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(PRIVATE_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function writePrivate(keys: string[]) {
+  try {
+    localStorage.setItem(PRIVATE_KEY, JSON.stringify([...new Set(keys)]));
+  } catch {
+    /* storage unavailable: the switcher just won't remember */
+  }
+}
+
+async function loadRoutes(): Promise<{ routes: RouteListing[]; wanted: string | null }> {
+  const wanted = readRouteParam();
+  const routes = await listRoutes();
+  const remembered = readPrivate();
+  const keep: string[] = [];
+  for (const key of new Set([...remembered, ...(wanted ? [wanted] : [])])) {
+    if (routes.some((r) => routeKey(r.route) === key)) continue;
+    const [network = "", ref = ""] = key.split("/");
+    const manifest = await loadManifest(network, ref).catch(() => null);
+    if (!manifest) continue; // forgotten (npm run forget) or never existed
+    if (manifest.visibility === "private") keep.push(key);
+    routes.push(listingOf(manifest));
+  }
+  writePrivate(keep);
+  return { routes, wanted };
 }
 
 function readCollapsed(): boolean {
@@ -225,15 +269,18 @@ export function App() {
   const [dreamResult, setDreamResult] = useState<StretchResult | null>(null);
 
   useEffect(() => {
-    listRoutes()
-      .then((r) => {
+    loadRoutes()
+      .then(({ routes: r, wanted }) => {
         setRoutes(r);
-        setRouteId((id) => id ?? r[0]?.route.id ?? null);
+        const pick = r.find((x) => routeKey(x.route) === wanted) ?? r[0];
+        setRouteId((id) => id ?? pick?.route.id ?? null);
       })
       .catch((e: Error) => setError(e.message));
   }, []);
 
   const listing = routes?.find((r) => r.route.id === routeId) ?? null;
+  // EuroVelo status (development and signage) exists only on EuroVelo routes; a rider's own route is not rated (D40).
+  const isEuroVelo = listing?.route.network === "eurovelo";
 
   useEffect(() => {
     if (!listing) return;
@@ -241,14 +288,14 @@ export function App() {
     loadBundle(listing.route.network, listing.route.ref)
       .then((b) => {
         setBundle(b);
-        if (!b.events) setLayer("status");
+        if (!b.events && b.manifest.route.network === "eurovelo") setLayer("status");
       })
       .catch((e: Error) => setError(e.message));
   }, [listing]);
 
   useEffect(() => {
     const hash = selectedSection === null ? "" : `#section=${selectedSection}`;
-    window.history.replaceState(null, "", `${window.location.pathname}${hash}`);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
   }, [selectedSection]);
 
   useEffect(() => {
@@ -355,6 +402,15 @@ export function App() {
     return picked && !out.includes(picked) ? [...out, picked] : out;
   }, [filteredPlaces, spacing, places, selectedPlace]);
   const ahead = useMemo(() => (aheadM === null ? new Map<string, Place[]>() : aheadByService(places, aheadM, 3)), [places, aheadM]);
+  const aheadUser = useMemo(
+    () =>
+      aheadM === null || !bundle
+        ? []
+        : bundle.userPlaces
+            .filter((p) => p.at_m >= aheadM && p.at_m <= aheadM + windowKm * 1000)
+            .sort((a, b) => a.at_m - b.at_m),
+    [bundle, aheadM, windowKm],
+  );
   const marker = useMemo(
     () => (slicer && aheadActive && aheadM !== null ? slicer.pointAt(aheadM) : null),
     [slicer, aheadActive, aheadM],
@@ -463,7 +519,7 @@ export function App() {
       <aside className="sidebar">
         <header>
           <div className="header-top">
-            <div className="eyebrow">DreamPlanGo · audit viewer (M3)</div>
+            <div className="eyebrow">DreamPlanGo · audit viewer (M3.5)</div>
             <button
               className="collapse"
               onClick={() => setCollapsed((c) => !c)}
@@ -474,16 +530,37 @@ export function App() {
             </button>
           </div>
           {routes.length > 1 ? (
-            <select value={routeId ?? ""} onChange={(e) => setRouteId(e.target.value)}>
+            <select
+              className="route-switch"
+              value={routeId ?? ""}
+              aria-label="Route"
+              onChange={(e) => {
+                // A fresh page per route: every selection, filter and Dream result starts clean.
+                const r = routes.find((x) => x.route.id === e.target.value);
+                if (r) window.location.assign(`${window.location.pathname}?route=${routeKey(r.route)}`);
+              }}
+            >
               {routes.map((r) => (
                 <option key={r.route.id} value={r.route.id}>
                   {r.route.name}
+                  {r.route.network === "user" ? " · private" : ""}
                 </option>
               ))}
             </select>
           ) : (
             <h1>{listing?.route.name}</h1>
           )}
+          {bundle?.manifest.visibility === "private" && (
+            <div className="private-note" title="Your own route: never listed or shared (D25). Delete it with npm run forget.">
+              🔒 Private route · from your own file
+            </div>
+          )}
+          {bundle?.manifest.overlap?.map((o) => (
+            <div key={o.route_id} className="overlap-note">
+              Shares {km(o.shared_m, 1)} km ({pct(o.share)}) with {o.name}, sections{" "}
+              {o.sections.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(", ")}
+            </div>
+          ))}
           {bundle && summary && (
             <>
               <div className="stats">
@@ -497,6 +574,7 @@ export function App() {
                   <b>{summary.gap_count}</b> gaps ({km(summary.gap_straight_distance_m)} km)
                 </span>
               </div>
+              {isEuroVelo && (
               <div className="bar" aria-label="Share of route by EuroVelo development status">
                 {summary.status_breakdown.map((s) => (
                   <span
@@ -507,6 +585,7 @@ export function App() {
                   />
                 ))}
               </div>
+              )}
               {!collapsed && (
                 <>
                   <KpiBand
@@ -718,6 +797,25 @@ export function App() {
               next places of each kind, with the distance along the route and the detour to reach them.
             </div>
           )}
+          {bundle && tab === "ahead" && aheadM !== null && bundle.userPlaces.length > 0 && (
+            <div className="ahead-group">
+              <div className="ahead-title">
+                <span className="user-dot" /> Your waypoints
+                {aheadUser.length === 0 && <span className="muted"> · none in the next {windowKm} km</span>}
+              </div>
+              {aheadUser.map((p) => (
+                <div key={p.id} className="ahead-row user" title="From your own file: shown, never counted (D40)">
+                  <span className="ahead-km">+{km(p.at_m - aheadM, 1)} km</span>
+                  <span className="ahead-name">{p.name ?? p.kind}</span>
+                  <span className="ahead-meta">
+                    {p.kind}
+                    {p.offset_m >= 100 ? ` · ${distanceLabel(p.offset_m)} from the route` : ""}
+                    {p.note ? ` · ${p.note}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {bundle &&
             tab === "ahead" &&
             aheadM !== null &&
@@ -805,10 +903,11 @@ export function App() {
                   }
                 }}
                 onSelectPlace={setSelectedPlace}
+                userPlaces={bundle.userPlaces}
               />
               <div className="layer-panel">
                 <select value={layer} onChange={(e) => setLayer(e.target.value as LayerKey)} aria-label="Map layer">
-                  <option value="status">{LAYER_TITLES.status}</option>
+                  {isEuroVelo && <option value="status">{LAYER_TITLES.status}</option>}
                   {audited && AUDIT_LAYERS.map((l) => <option key={l} value={l}>{LAYER_TITLES[l]}</option>)}
                 </select>
                 <details className="panel-section" open>
