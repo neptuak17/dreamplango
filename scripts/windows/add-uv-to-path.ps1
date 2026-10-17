@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 
 function Send-EnvironmentChanged {
     # Broadcast WM_SETTINGCHANGE ("Environment") so Explorer and newly started programs see the new PATH.
-    Add-Type -Namespace DreamPlanGo -Name NativeMethods -MemberDefinition @'
+    Add-Type -Namespace Kilometrica -Name NativeMethods -MemberDefinition @'
 [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
     uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
@@ -31,7 +31,7 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
     $HWND_BROADCAST = [IntPtr]0xffff
     $WM_SETTINGCHANGE = 0x1A
     $SMTO_ABORTIFHUNG = 0x2
-    [void][DreamPlanGo.NativeMethods]::SendMessageTimeout(
+    [void][Kilometrica.NativeMethods]::SendMessageTimeout(
         $HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, 'Environment', $SMTO_ABORTIFHUNG, 5000, [ref]$result)
 }
 

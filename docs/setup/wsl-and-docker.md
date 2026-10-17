@@ -147,6 +147,6 @@ wsl -d Ubuntu-24.04 -- docker run --rm hello-world
 ## How M1 will use this (proposal, to confirm at the start of M1)
 
 - **Engine and Docker run inside Ubuntu:** the Python engine, Valhalla and the OSM tools, all with native Linux arm64 builds.
-- **The repository stays at `C:\Users\cliff\dev\dreamplango`,** so editing and this Claude session keep working unchanged. The engine's Linux virtualenv lives outside the repo, via `UV_PROJECT_ENVIRONMENT`, so it doesn't clash with the Windows one.
+- **The repository stays at `C:\Users\cliff\dev\kilometrica`,** so editing and this Claude session keep working unchanged. The engine's Linux virtualenv lives outside the repo, via `UV_PROJECT_ENVIRONMENT`, so it doesn't clash with the Windows one.
 - **Large data moves to the Linux filesystem** (e.g. `~/dpg-data`, set with `DPG_DATA_DIR`). Reading from `/mnt/c` is many times slower.
 - **The Node API and web viewer keep running on Windows.** They read the bundles through the `\\wsl.localhost\Ubuntu-24.04\...` path.

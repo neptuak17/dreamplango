@@ -19,7 +19,7 @@ from dpg_audit.lrs.geodesy import distance
 from dpg_audit.networks import eurovelo, user
 from dpg_audit.sources import osm
 
-app = typer.Typer(help="DreamPlanGo Route Audit Engine", no_args_is_help=True)
+app = typer.Typer(help="Kilometrica Route Audit Engine", no_args_is_help=True)
 
 
 def _source(network: str) -> networks.RouteSource:

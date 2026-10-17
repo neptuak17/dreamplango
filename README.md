@@ -1,4 +1,6 @@
-# DreamPlanGo
+# Kilometrica
+
+*Formerly DreamPlanGo (renamed 2026-10-17, D42 in the design). "dpg" remains the internal name of the audit process: the `dpg` command, the `dpg_audit` engine package and the `~/dpg-data` folder.*
 
 Route audits and Dream–Plan–Go trip support for long-distance cycle routes, starting with EuroVelo 8. Design, decisions and roadmap: [docs/DESIGN.md](docs/DESIGN.md).
 

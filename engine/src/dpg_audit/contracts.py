@@ -4,7 +4,7 @@ from typing import Any
 
 from dpg_audit.models import BundleContract
 
-SCHEMA_ID = "https://dreamplango.local/schemas/bundle-v0.schema.json"
+SCHEMA_ID = "https://kilometrica.local/schemas/bundle-v0.schema.json"
 
 
 _NAME_MAPS = ("properties", "$defs", "patternProperties")

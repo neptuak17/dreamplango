@@ -2708,5 +2708,5 @@
   ],
   "type": "object",
   "title": "BundleContract",
-  "$id": "https://dreamplango.local/schemas/bundle-v0.schema.json"
+  "$id": "https://kilometrica.local/schemas/bundle-v0.schema.json"
 }

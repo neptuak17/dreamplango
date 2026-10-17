@@ -16,5 +16,5 @@ const hostname = process.env.HOST ?? "127.0.0.1";
 const app = createApp(new FsBundleStore(dataDir));
 
 serve({ fetch: app.fetch, port, hostname }, (info) => {
-  console.log(`DreamPlanGo API on http://${hostname}:${info.port} (data: ${dataDir})`);
+  console.log(`Kilometrica API on http://${hostname}:${info.port} (data: ${dataDir})`);
 });

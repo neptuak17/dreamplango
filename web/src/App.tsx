@@ -519,7 +519,7 @@ export function App() {
       <aside className="sidebar">
         <header>
           <div className="header-top">
-            <div className="eyebrow">DreamPlanGo · audit viewer (M3.5)</div>
+            <div className="eyebrow">Kilometrica · audit viewer (M3.5)</div>
             <button
               className="collapse"
               onClick={() => setCollapsed((c) => !c)}

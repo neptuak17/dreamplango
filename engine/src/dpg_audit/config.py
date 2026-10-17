@@ -21,5 +21,5 @@ def user_agent() -> str:
     from dpg_audit import __version__
 
     contact = os.environ.get("DPG_CONTACT")
-    base = f"DreamPlanGo-prototype/{__version__}"
+    base = f"Kilometrica-prototype/{__version__}"
     return f"{base} ({contact})" if contact else base

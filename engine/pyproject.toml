@@ -1,7 +1,7 @@
 [project]
 name = "dpg-audit"
 version = "0.1.0"
-description = "DreamPlanGo Route Audit Engine"
+description = "Kilometrica Route Audit Engine"
 requires-python = ">=3.12"
 dependencies = [
     "cdsapi>=0.7.5",

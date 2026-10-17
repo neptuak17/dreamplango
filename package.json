@@ -1,7 +1,7 @@
 {
-  "name": "dreamplango",
+  "name": "kilometrica",
   "private": true,
-  "description": "DreamPlanGo monorepo: Python audit engine (engine/, runs in Ubuntu/WSL), TypeScript API (api/) and prototype web app (web/)",
+  "description": "Kilometrica monorepo: Python audit engine (engine/, runs in Ubuntu/WSL), TypeScript API (api/) and prototype web app (web/)",
   "workspaces": [
     "packages/*",
     "api",

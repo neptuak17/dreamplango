@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the DreamPlanGo audit engine inside Ubuntu (WSL). From Windows: `wsl -d Ubuntu-24.04 -- bash scripts/dpg ...`
+# Run the Kilometrica audit engine inside Ubuntu (WSL). From Windows: `wsl -d Ubuntu-24.04 -- bash scripts/dpg ...`
 #
 #   scripts/dpg <command> [args]   run the `dpg` CLI (fetch, ingest, audit, inspect, schemas, ...)
 #   scripts/dpg --test [args]      run the engine tests (pytest)
