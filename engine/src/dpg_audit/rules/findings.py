@@ -201,15 +201,15 @@ GAP_TEXT = {
     GapType.PUBLIC_TRANSPORT: (
         "route",
         Severity.CAUTION,
-        "Probable public-transport link",
-        "Rail stations lie near both ends of the gap, so EuroVelo's advice to use public "
-        "transport probably applies. Check bike carriage rules.",
+        "Public-transport link",
+        "EuroVelo advises public transport across this gap (see the note for its source). Check bike carriage rules.",
     ),
     GapType.MISSING: (
         "route",
         Severity.WARNING,
         "Missing link",
-        "No track, ferry or rail link was found across this gap. Plan your own way across.",
+        "No track and no ferry or published link cross this gap: the route is incomplete here. Plans count it as "
+        "ridden (D50); riders draw their own line across it.",
     ),
     GapType.DISCONTINUITY: (
         "data_quality",
@@ -222,7 +222,8 @@ GAP_TEXT = {
 
 # Off EuroVelo routes, the public-transport advice is not EuroVelo's (D40).
 PUBLIC_TRANSPORT_ADVICE = (
-    "Rail stations lie near both ends of the gap, so a train probably bridges it. Check bike carriage rules."
+    "The route's publisher advises public transport across this gap (see the note for its source). Check bike "
+    "carriage rules."
 )
 
 
@@ -239,8 +240,6 @@ def gap_findings(components: list[Component], notes: list[dict], eurovelo: bool 
         extra = []
         if note.get("ferry"):
             extra.append(f"Ferry route in OSM: {note['ferry']}.")
-        if note.get("stations"):
-            extra.append("Nearest stations: " + " / ".join(s or "unnamed" for s in note["stations"]) + ".")
         if note.get("curated_note"):
             extra.append(note["curated_note"])
         out.append(

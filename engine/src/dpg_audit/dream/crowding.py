@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 
 from dpg_audit.config import user_agent
-from dpg_audit.models import Licence, SourceSnapshot
+from dpg_audit.models import CountryCalendar, Holiday, Licence, SchoolBreak, SourceSnapshot
 
 OPENHOLIDAYS = "https://openholidaysapi.org"
 EUROSTAT = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/tour_occ_nim"
@@ -179,6 +179,50 @@ class CrowdingSource:
             for mm in range(1, 13):
                 index[mm - 1] += series[(y, mm)] / mean / len(years)
         return [round(x, 3) for x in index], f"{years[0]}–{years[-1]}"
+
+    # --- dates, for Plan (11.6) ------------------------------------------------------------------------------
+
+    @staticmethod
+    def _name(entry: dict) -> str:
+        names = entry.get("name", [])
+        return next((n["text"] for n in names if n.get("language") == "EN"), names[0]["text"] if names else "Holiday")
+
+    @staticmethod
+    def _regions(entry: dict) -> list[str]:
+        return sorted({s["code"] for s in entry.get("subdivisions", []) if s.get("code")})
+
+    def calendar(self, cc: str, covered: set[str]) -> CountryCalendar:
+        """The public and school holiday dates behind the monthly figures. Summer school breaks are not in the
+        source; a country or year with no data stays empty, with its year null (D37)."""
+        if cc not in covered:
+            return CountryCalendar(country=cc, public_year=None, public=[], school_year=None, school=[])
+        public, public_year = self._latest("PublicHolidays", cc)
+        school, school_year = self._latest("SchoolHolidays", cc)
+        school = [h for h in school if not any("lessons" in n.get("text", "").lower() for n in h.get("name", []))]
+        return CountryCalendar(
+            country=cc,
+            public_year=public_year,
+            public=[
+                Holiday(
+                    date=h["startDate"],
+                    name=self._name(h),
+                    nationwide=bool(h.get("nationwide")),
+                    regions=self._regions(h),
+                )
+                for h in sorted(public, key=lambda h: h["startDate"])
+            ],
+            school_year=school_year,
+            school=[
+                SchoolBreak(
+                    start=h["startDate"],
+                    end=h["endDate"],
+                    name=self._name(h),
+                    nationwide=bool(h.get("nationwide")) or not h.get("subdivisions"),
+                    regions=self._regions(h),
+                )
+                for h in sorted(school, key=lambda h: h["startDate"])
+            ],
+        )
 
     # --- combined -------------------------------------------------------------------------------------------
 

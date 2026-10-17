@@ -23,6 +23,10 @@ export interface BundleContract {
   dream: DreamFile;
   ways: WaysFile;
   user_places: UserPlacesFile;
+  stops: StopsFile;
+  effort: EffortFile;
+  highlights: HighlightsFile;
+  calendar: CalendarFile;
   current: CurrentPointer;
 }
 export interface BundleManifest {
@@ -849,6 +853,193 @@ export interface UserPlace {
    * Daily section at at_m
    */
   section: number | null;
+}
+export interface StopsFile {
+  season_year: number;
+  /**
+   * Services count towards a stop within this distance of it along the route
+   */
+  reach_m: number;
+  stops: Stop[];
+}
+/**
+ * A candidate overnight stop for Plan (11.6): the places to stay that count, grouped by the town they belong to.
+ *
+ * Counts only, never a place name, so the file can be free (D45).
+ */
+export interface Stop {
+  id: string;
+  /**
+   * Town or village; null when the beds are grouped by km only
+   */
+  name: string | null;
+  /**
+   * OSM place=*: city, town or village; null when grouped by km
+   */
+  place_kind: string | null;
+  /**
+   * Where the rider leaves the route for the stop: its beds' median access point
+   */
+  at_m: number;
+  /**
+   * The town's position, else the route at at_m
+   */
+  lon: number;
+  lat: number;
+  country: string | null;
+  /**
+   * The shortest ridden distance from the route to one of its beds
+   */
+  detour_m: number | null;
+  beds: StopBeds[];
+  /**
+   * Other counted places within reach of the stop along the route: food, water, atm, pharmacy, bike_shop, toilets
+   */
+  services: {
+    [k: string]: number;
+  };
+  /**
+   * A bike-carrying station within bail-out reach of the stop
+   */
+  station: string | null;
+  station_at_m: number | null;
+}
+/**
+ * The places to stay of one kind at a stop, with their opening by month (D18), grouped by month code.
+ */
+export interface StopBeds {
+  /**
+   * Place kind: campsite, hotel, guest_house, hostel, hut or other
+   */
+  kind: string;
+  count: number;
+  /**
+   * [12-letter month code, how many of these beds have it]; '?' * 12 when nothing is published
+   */
+  seasons: [string, number][];
+}
+/**
+ * What the pace model needs (11.6), compact and free so the teaser can time real days (D45).
+ */
+export interface EffortFile {
+  step_m: number;
+  parts: EffortPart[];
+  gaps: EffortGap[];
+}
+/**
+ * Elevation and surface along one ridden part of the path, every `step_m` from `from_m`.
+ */
+export interface EffortPart {
+  from_m: number;
+  to_m: number;
+  /**
+   * Elevation (m) at from_m + i * step_m, the last at to_m; null where the terrain is unknown (straight-line placeholders, D37)
+   */
+  ele: (number | null)[];
+  /**
+   * One letter per step: r road, c cycle path, g gravel, u unknown, f ferry (D36 classes)
+   */
+  surface: string;
+}
+/**
+ * A gap between ridden parts. An unfilled (missing) gap is counted as ridden in a plan (D50).
+ */
+export interface EffortGap {
+  at_m: number;
+  after_section: number | null;
+  /**
+   * ferry, public_transport, discontinuity, missing or unclassified
+   */
+  type: string;
+  straight_distance_m: number;
+  basis: string | null;
+  confidence: ("high" | "medium" | "low") | null;
+}
+export interface HighlightsFile {
+  highlights: Highlight[];
+}
+/**
+ * Something worth seeing near the route (11.6), from the OSM features behind M3's themes.
+ */
+export interface Highlight {
+  /**
+   * OSM id, e.g. osm:n123
+   */
+  id: string;
+  /**
+   * viewpoint, castle, ruins, monument, archaeological_site, fort, palace, city_gate, citywalls, manor, heritage, museum, attraction, gallery, beach, peak or pass
+   */
+  kind: string;
+  name: string;
+  lon: number;
+  lat: number;
+  /**
+   * Measure of the closest route point
+   */
+  at_m: number;
+  /**
+   * Straight-line distance from the route
+   */
+  offset_m: number;
+  /**
+   * Elevation tagged in OSM (peaks and passes)
+   */
+  ele: number | null;
+  wikidata: string | null;
+  /**
+   * OSM's wikipedia tag, e.g. 'fr:Pont du Gard'
+   */
+  wikipedia: string | null;
+  /**
+   * Tagged as a UNESCO World Heritage site (heritage=1)
+   */
+  unesco: boolean;
+  /**
+   * 0-1: how notable, from its kind and tags; used to pick a day's top highlights
+   */
+  rank: number;
+}
+export interface CalendarFile {
+  season_year: number;
+  countries: CountryCalendar[];
+}
+/**
+ * Holiday dates for one country (OpenHolidays). Missing years and countries stay missing (D37).
+ */
+export interface CountryCalendar {
+  country: string;
+  /**
+   * Calendar year of the public-holiday dates; null: no data
+   */
+  public_year: number | null;
+  public: Holiday[];
+  /**
+   * Calendar year of the school-holiday dates; null: no data
+   */
+  school_year: number | null;
+  /**
+   * Summer breaks are not in the source (11.4)
+   */
+  school: SchoolBreak[];
+}
+export interface Holiday {
+  /**
+   * YYYY-MM-DD
+   */
+  date: string;
+  name: string;
+  nationwide: boolean;
+  /**
+   * ISO 3166-2 codes where it applies, when not nationwide
+   */
+  regions: string[];
+}
+export interface SchoolBreak {
+  start: string;
+  end: string;
+  name: string;
+  nationwide: boolean;
+  regions: string[];
 }
 export interface CurrentPointer {
   run_id: string;

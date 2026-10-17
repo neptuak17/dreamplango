@@ -56,4 +56,4 @@ levels:                            # D36: what a rider is comfortable riding per
   - {level: 5, name: Tough, km_min: 90, km_max: 130, climb_max_m: 1500}
 
 breaks:
-  hard_crossing_m: 50000           # ferry/train links longer than this end a stretch (as do missing links)
+  hard_crossing_m: 50000           # ferry/train links longer than this end a stretch; missing links count as ridden (D50)

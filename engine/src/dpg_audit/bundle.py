@@ -5,7 +5,8 @@ Layout: <data>/bundles/<network>/<ref>/<run_id>/<files>
 Private audits (a rider's own route, D25) live apart, under <data>/bundles/private/<network>/<ref>/.
 
 A geometry-only bundle (`dpg ingest`) has manifest, path, sections, findings and profile. A full audit (`dpg audit`)
-adds events (layers), minor (1 km criteria), scores, places, services and dream (M3).
+adds events (layers), minor (1 km criteria), scores, places, services, dream (M3) and the Plan files (M4): stops,
+effort, highlights and calendar.
 """
 
 import hashlib
@@ -23,12 +24,15 @@ from dpg_audit.build import RouteBuild
 from dpg_audit.lrs.sections import fixed_sections
 from dpg_audit.models import (
     BundleManifest,
+    CalendarFile,
     ComponentKind,
     CurrentPointer,
     DreamFile,
+    EffortFile,
     EventsFile,
     Finding,
     FindingsFile,
+    HighlightsFile,
     MinorFile,
     PipelineInfo,
     PlacesFile,
@@ -38,6 +42,7 @@ from dpg_audit.models import (
     SectionsFile,
     ServicesFile,
     SourceSnapshot,
+    StopsFile,
     UserPlacesFile,
     WaysFile,
 )
@@ -56,6 +61,10 @@ FILE_NAMES = {
     "dream": "dream.json",
     "ways": "ways.json",
     "user_places": "user_places.json",
+    "stops": "stops.json",
+    "effort": "effort.json",
+    "highlights": "highlights.json",
+    "calendar": "calendar.json",
 }
 BLOCK_SIZE_M = 50_000.0
 MINOR_SIZE_M = 1_000.0
@@ -146,6 +155,10 @@ def write_bundle(
     dream: DreamFile | None = None,
     ways: WaysFile | None = None,
     user_places: UserPlacesFile | None = None,
+    stops: StopsFile | None = None,
+    effort: EffortFile | None = None,
+    highlights: HighlightsFile | None = None,
+    calendar: CalendarFile | None = None,
     overlap: list[RouteOverlap] | None = None,
     private: bool = False,
 ) -> tuple[str, Path]:
@@ -179,6 +192,10 @@ def write_bundle(
         "dream": dream,
         "ways": ways,
         "user_places": user_places,
+        "stops": stops,
+        "effort": effort,
+        "highlights": highlights,
+        "calendar": calendar,
     }
     files = {"manifest": FILE_NAMES["manifest"]}
     for name, payload in payloads.items():

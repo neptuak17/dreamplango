@@ -128,10 +128,10 @@ def test_gap_classification():
         gap(7, (3.0, 45.0), (3.2, 45.0)),
     ]
     ferries = [{"id": 1, "name": "Port A – Port B", "coords": [(0.0, 45.01), (0.1, 45.01)]}]
-    stations = [{"id": 1, "name": "S1", "lon": 2.0, "lat": 45.0}, {"id": 2, "name": "S2", "lon": 2.2, "lat": 45.0}]
-    notes = classify_gaps(comps, ferries, stations, [CuratedGap(after_section=2, type=GapType.FERRY, note="sea")])
+    # Rail stations sit at both ends of the third gap, but that is no evidence of a link (D50): it stays missing.
+    notes = classify_gaps(comps, ferries, [CuratedGap(after_section=2, type=GapType.FERRY, note="sea")])
     types = [c.gap_type for c in comps if c.kind == ComponentKind.GAP]
-    assert types == [GapType.FERRY, GapType.FERRY, GapType.PUBLIC_TRANSPORT, GapType.MISSING]
+    assert types == [GapType.FERRY, GapType.FERRY, GapType.MISSING, GapType.MISSING]
     assert [c.gap_basis for c in comps if c.kind == ComponentKind.GAP][:2] == ["osm_ferry_route", "curated"]
     assert notes[0]["ferry"] == "Port A – Port B"
 
@@ -157,7 +157,7 @@ def test_ferry_must_connect_both_ends_not_just_pass_by():
         comp(2, ComponentKind.RIDE, (0.05, 45), (0.05, 45), 2),
     ]
     coastal = [{"id": 9, "name": "Coastal line", "coords": [(-0.5, 45.01), (0.6, 45.01)]}]  # passes both ends
-    classify_gaps(comps, coastal, [], [])
+    classify_gaps(comps, coastal, [])
     assert comps[1].gap_type != GapType.FERRY
 
 

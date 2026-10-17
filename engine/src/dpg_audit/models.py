@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-BUNDLE_SCHEMA_VERSION = "0.5"
+BUNDLE_SCHEMA_VERSION = "0.6"
 
 LonLat = tuple[float, float]
 
@@ -570,6 +570,131 @@ class DreamFile(Model):
     breaks: list[RouteBreak]
 
 
+class StopBeds(Model):
+    """The places to stay of one kind at a stop, with their opening by month (D18), grouped by month code."""
+
+    kind: str = Field(description="Place kind: campsite, hotel, guest_house, hostel, hut or other")
+    count: int
+    seasons: list[tuple[str, int]] = Field(
+        description="[12-letter month code, how many of these beds have it]; '?' * 12 when nothing is published"
+    )
+
+
+class Stop(Model):
+    """A candidate overnight stop for Plan (11.6): the places to stay that count, grouped by the town they belong to.
+
+    Counts only, never a place name, so the file can be free (D45)."""
+
+    id: str
+    name: str | None = Field(description="Town or village; null when the beds are grouped by km only")
+    place_kind: str | None = Field(description="OSM place=*: city, town or village; null when grouped by km")
+    at_m: float = Field(description="Where the rider leaves the route for the stop: its beds' median access point")
+    lon: float = Field(description="The town's position, else the route at at_m")
+    lat: float
+    country: str | None
+    detour_m: float | None = Field(description="The shortest ridden distance from the route to one of its beds")
+    beds: list[StopBeds]
+    services: dict[str, int] = Field(
+        description="Other counted places within reach of the stop along the route: food, water, atm, pharmacy, "
+        "bike_shop, toilets"
+    )
+    station: str | None = Field(description="A bike-carrying station within bail-out reach of the stop")
+    station_at_m: float | None
+
+
+class StopsFile(Model):
+    season_year: int
+    reach_m: float = Field(description="Services count towards a stop within this distance of it along the route")
+    stops: list[Stop]
+
+
+class EffortPart(Model):
+    """Elevation and surface along one ridden part of the path, every `step_m` from `from_m`."""
+
+    from_m: float
+    to_m: float
+    ele: list[int | None] = Field(
+        description="Elevation (m) at from_m + i * step_m, the last at to_m; null where the terrain is unknown "
+        "(straight-line placeholders, D37)"
+    )
+    surface: str = Field(
+        description="One letter per step: r road, c cycle path, g gravel, u unknown, f ferry (D36 classes)"
+    )
+
+
+class EffortGap(Model):
+    """A gap between ridden parts. An unfilled (missing) gap is counted as ridden in a plan (D50)."""
+
+    at_m: float
+    after_section: int | None
+    type: str = Field(description="ferry, public_transport, discontinuity, missing or unclassified")
+    straight_distance_m: float
+    basis: str | None
+    confidence: Confidence | None
+
+
+class EffortFile(Model):
+    """What the pace model needs (11.6), compact and free so the teaser can time real days (D45)."""
+
+    step_m: float
+    parts: list[EffortPart]
+    gaps: list[EffortGap]
+
+
+class Highlight(Model):
+    """Something worth seeing near the route (11.6), from the OSM features behind M3's themes."""
+
+    id: str = Field(description="OSM id, e.g. osm:n123")
+    kind: str = Field(
+        description="viewpoint, castle, ruins, monument, archaeological_site, fort, palace, city_gate, citywalls, "
+        "manor, heritage, museum, attraction, gallery, beach, peak or pass"
+    )
+    name: str
+    lon: float
+    lat: float
+    at_m: float = Field(description="Measure of the closest route point")
+    offset_m: float = Field(description="Straight-line distance from the route")
+    ele: float | None = Field(description="Elevation tagged in OSM (peaks and passes)")
+    wikidata: str | None
+    wikipedia: str | None = Field(description="OSM's wikipedia tag, e.g. 'fr:Pont du Gard'")
+    unesco: bool = Field(description="Tagged as a UNESCO World Heritage site (heritage=1)")
+    rank: float = Field(description="0-1: how notable, from its kind and tags; used to pick a day's top highlights")
+
+
+class HighlightsFile(Model):
+    highlights: list[Highlight]
+
+
+class Holiday(Model):
+    date: str = Field(description="YYYY-MM-DD")
+    name: str
+    nationwide: bool
+    regions: list[str] = Field(description="ISO 3166-2 codes where it applies, when not nationwide")
+
+
+class SchoolBreak(Model):
+    start: str
+    end: str
+    name: str
+    nationwide: bool
+    regions: list[str]
+
+
+class CountryCalendar(Model):
+    """Holiday dates for one country (OpenHolidays). Missing years and countries stay missing (D37)."""
+
+    country: str
+    public_year: int | None = Field(description="Calendar year of the public-holiday dates; null: no data")
+    public: list[Holiday]
+    school_year: int | None = Field(description="Calendar year of the school-holiday dates; null: no data")
+    school: list[SchoolBreak] = Field(description="Summer breaks are not in the source (11.4)")
+
+
+class CalendarFile(Model):
+    season_year: int
+    countries: list[CountryCalendar]
+
+
 class CurrentPointer(Model):
     run_id: str
     updated_at: datetime
@@ -590,4 +715,8 @@ class BundleContract(Model):
     dream: DreamFile
     ways: WaysFile
     user_places: UserPlacesFile
+    stops: StopsFile
+    effort: EffortFile
+    highlights: HighlightsFile
+    calendar: CalendarFile
     current: CurrentPointer

@@ -1,0 +1,787 @@
+/* Rider view (M4, 11.6): web first (D49), a phone-width view of the plan for Go, and a print layout (trip book). */
+
+.rider {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.rider.center {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+}
+
+.rider h1 {
+  font-size: 22px;
+  margin: 0 0 2px;
+  line-height: 1.25;
+}
+
+.rider h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.rider .small {
+  font-size: 12.5px;
+}
+
+.rider button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+.rider button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.rider button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  margin-top: 10px;
+}
+
+.rider button.link,
+.rider button.more,
+.rider button.close {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0 4px;
+}
+
+.rider a {
+  color: var(--accent);
+}
+
+.rider .label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 10px 0 3px;
+}
+
+.rider-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.rider-bar .brand {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.rider-bar .spacer {
+  flex: 1;
+}
+
+.rider-bar .pass {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.rider .banner {
+  padding: 8px 16px;
+  background: #fff8e1;
+  border-bottom: 1px solid #ffe08a;
+}
+
+.rider-foot {
+  padding: 16px;
+  text-align: center;
+}
+
+/* --- start page ------------------------------------------------------------------------------------------ */
+
+.start-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.route-pick,
+.saved,
+.itin {
+  padding-left: 18px;
+}
+
+.route-pick li,
+.saved li,
+.itin li {
+  margin: 6px 0;
+}
+
+/* --- the plan: wide layout --------------------------------------------------------------------------------- */
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 440px) minmax(0, 1fr);
+  gap: 0;
+  align-items: start;
+}
+
+.plan-side {
+  padding: 14px 16px 24px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  min-height: calc(100vh - 46px);
+}
+
+.plan-side > section {
+  margin: 0 0 18px;
+}
+
+.plan-main {
+  position: sticky;
+  top: 46px;
+  height: calc(100vh - 46px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-map {
+  flex: 0 0 48vh;
+  min-height: 260px;
+}
+
+.profile {
+  width: 100%;
+  height: 140px;
+  flex: 0 0 140px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  touch-action: none;
+}
+
+.profile .ele {
+  fill: none;
+  stroke: #495057;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile .axis {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+.profile .day-band {
+  fill: #1c7ed6;
+  opacity: 0.06;
+  cursor: pointer;
+}
+
+.profile .day-band.odd {
+  fill: #0c8599;
+  opacity: 0.1;
+}
+
+.profile .stop-mark line {
+  stroke: #212529;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.profile .stop-mark circle {
+  fill: #212529;
+  cursor: grab;
+}
+
+.profile .stop-mark.locked circle {
+  fill: #f08c00;
+}
+
+.profile .stop-num {
+  fill: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.plan-main .hint {
+  padding: 12px 16px;
+}
+
+.day-panel {
+  padding: 14px 16px 28px;
+}
+
+.answers {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+/* --- questions ---------------------------------------------------------------------------------------------- */
+
+.questions {
+  display: grid;
+  gap: 8px;
+}
+
+.questions label,
+.questions .q-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.questions label.check {
+  display: flex;
+}
+
+.questions input,
+.questions select {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.questions .q-date.attention input {
+  border-color: #f08c00;
+  box-shadow: 0 0 0 2px #fff3bf;
+}
+
+.questions .q-date em {
+  grid-column: 2;
+  font-size: 12.5px;
+  color: #a35d00;
+  font-style: normal;
+}
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.seg button.on {
+  background: var(--selected);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.q-more summary {
+  cursor: pointer;
+  color: var(--accent);
+  margin: 4px 0 8px;
+}
+
+.q-more {
+  display: grid;
+  gap: 8px;
+}
+
+/* --- brief ---------------------------------------------------------------------------------------------------- */
+
+.brief-sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.readiness {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.readiness.ready {
+  background: #ebfbee;
+  color: #2b8a3e;
+}
+
+.readiness.calls {
+  background: #fff4e6;
+  color: #a35d00;
+}
+
+.lines {
+  margin: 0;
+}
+
+.lines .line {
+  margin: 0 0 8px;
+}
+
+.lines dt {
+  font-weight: 700;
+}
+
+.lines dd {
+  margin: 0 0 0 0;
+}
+
+.confidence summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.effort-chart {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+  margin: 4px 0 16px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.effort-chart .usual {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px dashed #868e96;
+}
+
+.effort-chart .bar {
+  flex: 1;
+  border: none;
+  padding: 0;
+  border-radius: 3px 3px 0 0;
+  background: #74c0fc;
+}
+
+.effort-chart .bar.harder {
+  background: #ffa94d;
+}
+
+.effort-chart .bar.beyond {
+  background: #ff6b6b;
+}
+
+.effort-chart .bar.selected {
+  outline: 2px solid #212529;
+}
+
+/* --- calls ---------------------------------------------------------------------------------------------------- */
+
+.calls .call {
+  border: 1px solid #ffd8a8;
+  background: #fff9f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.calls .call-title {
+  font-weight: 700;
+}
+
+.calls .call-options {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.calls .call-options button {
+  text-align: left;
+  display: grid;
+  padding: 8px 10px;
+}
+
+.calls .call-options button span {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.calls .call-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.locked {
+  background: #f1f3f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+}
+
+/* --- day list ------------------------------------------------------------------------------------------------- */
+
+.day-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.day-list button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 50px 42px 1fr auto auto 10px auto;
+  gap: 6px;
+  align-items: center;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 7px 4px;
+  background: none;
+}
+
+.day-list li.selected button {
+  background: var(--selected);
+}
+
+.day-list li.rest button {
+  color: var(--muted);
+}
+
+.day-list .d-num {
+  font-weight: 600;
+}
+
+.day-list .d-date,
+.day-list .d-h {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.day-list .d-route {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-list .d-effort {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #74c0fc;
+}
+
+.day-list .d-effort.harder {
+  background: #ffa94d;
+}
+
+.day-list .d-effort.beyond {
+  background: #ff6b6b;
+}
+
+.day-list .d-count {
+  font-size: 11px;
+  background: #e9ecef;
+  border-radius: 9px;
+  padding: 0 6px;
+}
+
+/* --- day card ----------------------------------------------------------------------------------------------- */
+
+.day-card header h2 {
+  font-size: 19px;
+  margin: 2px 0 4px;
+}
+
+.day-card .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.day-card .effort.harder {
+  color: #d9480f;
+}
+
+.day-card .effort.beyond {
+  color: #c92a2a;
+  font-weight: 700;
+}
+
+.day-card .times {
+  margin: 8px 0;
+}
+
+.day-card .story {
+  font-style: italic;
+  margin: 8px 0 4px;
+}
+
+.item-list ul,
+.todo-group ul,
+.beds,
+.alts ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item-list li,
+.todo-group li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 3px 0;
+}
+
+.item-list li details {
+  flex: 1;
+  min-width: 200px;
+}
+
+.item-list li summary {
+  cursor: pointer;
+}
+
+.item-list li p {
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.item-list .source {
+  font-size: 12px;
+}
+
+.item-list li.done summary,
+.todo-group li.done > div > div:first-child {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.beds li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.beds li > span:first-child {
+  flex: 1;
+  min-width: 200px;
+}
+
+.beds li.chosen {
+  background: #ebfbee;
+}
+
+.planb {
+  margin-top: 6px;
+}
+
+.alts summary {
+  cursor: pointer;
+  color: var(--accent);
+  margin-top: 6px;
+}
+
+.alts li {
+  padding: 3px 0;
+}
+
+.day-actions,
+.night-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* --- before you go ------------------------------------------------------------------------------------------ */
+
+.todo-group li > div {
+  flex: 1;
+}
+
+.exports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.exports .label,
+.exports p {
+  flex-basis: 100%;
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.share-row > span {
+  flex: 1;
+  min-width: 160px;
+}
+
+.qr-box {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.qr {
+  width: 180px;
+  height: 180px;
+  flex: 0 0 180px;
+}
+
+.qr svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* --- compare ------------------------------------------------------------------------------------------------ */
+
+.compare-table {
+  overflow-x: auto;
+}
+
+.compare table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+
+.compare th,
+.compare td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+/* --- phone width (D49: the view of the plan Go starts from) ------------------------------------------------ */
+
+@media (max-width: 760px) {
+  .plan-grid {
+    display: block;
+  }
+
+  .plan-side {
+    border-right: none;
+    min-height: 0;
+  }
+
+  .plan-main {
+    position: static;
+    height: auto;
+    display: none;
+  }
+
+  .rider.plan.has-day .plan-main {
+    display: flex;
+    position: fixed;
+    inset: 46px 0 0 0;
+    z-index: 4;
+    background: var(--bg);
+  }
+
+  .rider.plan.has-day .plan-side {
+    display: none;
+  }
+
+  .plan-map {
+    flex-basis: 34vh;
+    min-height: 200px;
+  }
+
+  .profile {
+    height: 110px;
+    flex-basis: 110px;
+  }
+
+  .questions label,
+  .questions .q-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .day-list button {
+    grid-template-columns: 46px 1fr auto 10px;
+  }
+
+  .day-list .d-date,
+  .day-list .d-h,
+  .day-list .d-count {
+    display: none;
+  }
+
+  .rider-bar .pass .muted {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) {
+  .day-card .close {
+    display: none;
+  }
+}
+
+/* --- trip book (print) ---------------------------------------------------------------------------------------- */
+
+.trip-book {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #fff;
+}
+
+.trip-book .day-card {
+  break-before: page;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 16px;
+}
+
+@media print {
+  .no-print {
+    display: none;
+  }
+
+  .trip-book {
+    padding: 0;
+  }
+
+  .trip-book details > *:not(summary) {
+    display: block;
+  }
+}

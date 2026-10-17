@@ -17,6 +17,7 @@ from dpg_audit.dream.profile import DreamProfile, grade
 from dpg_audit.layers import elevation
 from dpg_audit.lrs.geodesy import local_scale
 from dpg_audit.models import (
+    CalendarFile,
     CampsiteSeasons,
     ClimateMonths,
     ComponentKind,
@@ -47,6 +48,8 @@ GAP_SERVICES = ("water", "food", "accommodation", "bike_shop")
 class DreamResult:
     file: DreamFile
     sources: list[SourceSnapshot]
+    calendar: CalendarFile
+    """Holiday dates per country, for Plan (11.6)."""
 
 
 class _Layer:
@@ -125,9 +128,11 @@ def build_dream(
     profile: DreamProfile,
     *,
     untrusted: list[tuple[float, float]] | None = None,
+    extra_countries: set[str] | None = None,
     log: Callable[[str], None] = print,
 ) -> DreamResult:
-    """`untrusted`: path ranges where the official track is a straight-line placeholder (M1 findings)."""
+    """`untrusted`: path ranges where the official track is a straight-line placeholder (M1 findings).
+    `extra_countries`: countries the holiday calendar also covers, e.g. those of places near a border."""
     untrusted = untrusted or []
     path, daily = build.path, build.daily
     year = profile.season_year
@@ -157,6 +162,10 @@ def build_dream(
     crowd_src = CrowdingSource(root / "raw" / "crowding", year)
     covered = crowd_src.covered()
     crowding: dict[str | None, CountryCrowding] = {cc: crowd_src.country(cc, covered) for cc in set(countries)}
+    calendar_countries = sorted({cc for cc in countries if cc} | (extra_countries or set()))
+    calendar = CalendarFile(
+        season_year=year, countries=[crowd_src.calendar(cc, covered) for cc in calendar_countries]
+    )
     crowd_src.close()
 
     infra = _Layer([e for e in events if e.layer == "infrastructure"])
@@ -325,8 +334,10 @@ def build_dream(
             continue
         before = next((r for r in reversed(rides) if r.to_m <= c.from_m + 1e-6), None)
         dist = c.straight_distance_m or 0.0
-        hard = c.gap_type == GapType.MISSING or (
-            c.gap_type != GapType.DISCONTINUITY and dist > float(profile.breaks["hard_crossing_m"])
+        # An unfilled (missing) gap counts as ridden however the rider bridges it (D50), so it never ends a stretch;
+        # only a long ferry or published transport link does.
+        hard = c.gap_type not in (GapType.DISCONTINUITY, GapType.MISSING) and dist > float(
+            profile.breaks["hard_crossing_m"]
         )
         breaks.append(
             RouteBreak(
@@ -349,4 +360,4 @@ def build_dream(
         breaks=breaks,
     )
     sources = ([era5.snapshot(files, root, profile.years, len(points))] if files else []) + crowd_src.snapshots(root)
-    return DreamResult(file=file, sources=sources)
+    return DreamResult(file=file, sources=sources, calendar=calendar)

@@ -56,6 +56,7 @@ beforeAll(() => {
     ],
   };
   writeFileSync(join(routeDir, RUN, "places.json"), JSON.stringify(places));
+  writeFileSync(join(routeDir, RUN, "stops.json"), JSON.stringify({ season_year: 2027, reach_m: 2500, stops: [] }));
 
   // A rider's own route: stored apart, never listed (D25)
   const own = join(dataDir, "bundles", "private", "user", "u0123456789");
@@ -101,6 +102,13 @@ describe("api v1", () => {
     expect(etag).toContain(RUN);
     const again = await app().request("/v1/routes/eurovelo/ev8/path", { headers: { "if-none-match": etag! } });
     expect(again.status).toBe(304);
+  });
+
+  it("serves the Plan files (M4)", async () => {
+    const res = await app().request("/v1/routes/eurovelo/ev8/stops");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { stops: unknown[] }).stops).toEqual([]);
+    expect((await app().request("/v1/routes/eurovelo/ev8/effort")).status).toBe(404); // not in this bundle
   });
 
   it("returns 404 for unknown routes and missing files", async () => {

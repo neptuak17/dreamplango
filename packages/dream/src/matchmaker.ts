@@ -125,9 +125,11 @@ function weighted(sections: DreamSection[], value: (s: DreamSection) => number |
 interface Run {
   sections: DreamSection[];
   crossings: string[];
+  /** Unfilled gaps crossed (D50): counted as ridden at their straight-line distance, with the terrain unknown. */
+  gapM: number;
 }
 
-/** Every run of consecutive sections that doesn't cross a hard break (missing link, long sea crossing). */
+/** Every run of consecutive sections that doesn't cross a hard break (a long sea crossing). */
 function runs(dream: DreamFile, maxKm: number): Run[] {
   const hard = new Set(dream.breaks.filter((b) => b.hard).map((b) => b.after_section));
   const soft = new Map(dream.breaks.filter((b) => !b.hard && b.type !== "discontinuity").map((b) => [b.after_section, b]));
@@ -135,15 +137,24 @@ function runs(dream: DreamFile, maxKm: number): Run[] {
   const out: Run[] = [];
   for (let i = 0; i < ordered.length; i++) {
     let length = 0;
+    let gapM = 0;
     const crossings: string[] = [];
     for (let j = i; j < ordered.length; j++) {
       const s = ordered[j]!;
       length += s.length_m;
       if (length > maxKm * 1000) break;
-      out.push({ sections: ordered.slice(i, j + 1), crossings: [...crossings] });
+      out.push({ sections: ordered.slice(i, j + 1), crossings: [...crossings], gapM });
       if (hard.has(s.number)) break;
       const b = soft.get(s.number);
-      if (b) crossings.push(`${b.type.replaceAll("_", " ")} after section ${s.number} (${km(b.straight_distance_m)} km)`);
+      if (!b) continue;
+      if (b.type === "missing") {
+        // Not a navigation app: however the rider bridges an unfilled gap, it is counted as ridden (D50).
+        length += b.straight_distance_m;
+        gapM += b.straight_distance_m;
+        crossings.push(`${km(b.straight_distance_m)} km gap in the route after section ${s.number}, counted as ridden`);
+      } else {
+        crossings.push(`${b.type.replaceAll("_", " ")} after section ${s.number} (${km(b.straight_distance_m)} km)`);
+      }
     }
   }
   return out;
@@ -167,10 +178,11 @@ function evaluate(dream: DreamFile, run: Run, way: Way, q: DreamQuery): StretchR
   const level = dream.levels.find((l) => l.level === q.level) ?? dream.levels[2];
   if (!level) return null;
   const secs = way === "forward" ? run.sections : [...run.sections].reverse();
-  const totalM = secs.reduce((a, s) => a + s.length_m, 0);
+  const totalM = secs.reduce((a, s) => a + s.length_m, 0) + run.gapM;
   const kmPerDay = totalM / 1000 / q.days;
   if (kmPerDay > level.km_max * (1 + TOLERANCE) || kmPerDay < level.km_min * (1 - 3 * TOLERANCE)) return null;
   const climb = climbOf(secs, way);
+  climb.unknownM += run.gapM; // nothing is known of the terrain across an unfilled gap (D37)
   const partly = climb.unknownM > 0;
   // Known climbing per day: complete, or a minimum when part is unknown. A minimum already over the limit rules the
   // run out as surely as a complete figure.

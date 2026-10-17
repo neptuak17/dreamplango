@@ -1,5 +1,5 @@
-"""The audit: match the route to OSM, derive layers, classify gaps, add terrain (M1), services and access (M2) and
-Dream data (M3), apply rules."""
+"""The audit: match the route to OSM, derive layers, classify gaps, add terrain (M1), services and access (M2),
+Dream data (M3) and Plan data (M4), apply rules."""
 
 import json
 import time
@@ -13,6 +13,7 @@ from dpg_audit import overlap as overlap_mod
 from dpg_audit.build import assemble
 from dpg_audit.bundle import PROFILE_STEP_M, write_bundle
 from dpg_audit.config import work_dir
+from dpg_audit.dream import themes
 from dpg_audit.dream.pipeline import build_dream
 from dpg_audit.dream.profile import load_dream
 from dpg_audit.dream.themes import read_settlements
@@ -23,6 +24,7 @@ from dpg_audit.match.matcher import match_lines
 from dpg_audit.match.valhalla import Valhalla
 from dpg_audit.models import EventsFile, Licence, ProfileFile, ScoresFile, SourceSnapshot
 from dpg_audit.osmdata import load as load_osm
+from dpg_audit.plan import build_effort, build_highlights, build_stops
 from dpg_audit.rules.evaluate import evaluate, section_scores, stretch_stats
 from dpg_audit.rules.findings import gap_findings, rule_findings, to_findings
 from dpg_audit.rules.profile import load_route_config, load_rules
@@ -31,7 +33,7 @@ from dpg_audit.services.pipeline import build_places, services_file
 from dpg_audit.services.profile import load_services
 from dpg_audit.sources import dem
 
-PIPELINE = "dpg-audit/m3.5-user-routes"
+PIPELINE = "dpg-audit/m4-plan"
 
 
 @dataclass
@@ -68,8 +70,9 @@ def run(
     pbf = wd / "osm" / "corridor.osm.pbf"
     if not pbf.exists():
         raise FileNotFoundError(f"{pbf} missing: run `dpg osm-prepare {network} {ref}` first")
-    # Stages of a rider's own file are named after the towns at their ends (D40).
-    build = assemble(src.route(ref, root), src.tracks(snap, root, read_settlements(pbf, wd / "dream")))
+    # Stages of a rider's own file are named after the towns at their ends (D40); Plan's stops use the same towns.
+    settlements = read_settlements(pbf, wd / "dream")
+    build = assemble(src.route(ref, root), src.tracks(snap, root, settlements))
     osm_sources = [SourceSnapshot.model_validate(s) for s in json.loads((wd / "osm" / "sources.json").read_text())]
 
     client = Valhalla(valhalla_url)
@@ -84,7 +87,7 @@ def run(
     osm = load_osm(pbf, way_ids, wd / "osm")
     ev_number = classify.eurovelo_number(build.route.ref) if src.eurovelo else None
     matched = build_matched_layers(build.path, matches, osm, ev_number)
-    notes = classify_gaps(build.components, osm.ferries, osm.stations, route_cfg.gaps)
+    notes = classify_gaps(build.components, osm.ferries, route_cfg.gaps)
     t["layers"] = time.perf_counter() - t0 - sum(t.values())
 
     _log("sampling terrain (Copernicus DEM GLO-30) …")
@@ -147,9 +150,17 @@ def run(
         findings,
         load_dream(dream_name),
         untrusted=untrusted,
+        extra_countries={p.country for p in services.places if p.country and p.counts},
         log=_log,
     )
     t["dream"] = time.perf_counter() - t0 - sum(t.values())
+
+    _log("plan data: stops, effort, highlights …")
+    stops = build_stops(build.path, services.places, settlements, services.coverage, svc_profile.season_year)
+    effort = build_effort(build, profs, events, unknown)
+    highlights = build_highlights(build.path, themes.prepare(pbf, build.lines, wd / "dream"))
+    _log(f"plan: {len(stops.stops):,} stops, {len(highlights.highlights):,} highlights")
+    t["plan"] = time.perf_counter() - t0 - sum(t.values())
 
     ms = np.concatenate([np.append(np.arange(p.from_m, p.to_m, PROFILE_STEP_M), p.to_m) for p in build.path.parts])
     dem_ele = elevation.at(profs, ms)
@@ -200,6 +211,10 @@ def run(
         dream=dream.file,
         ways=ways,
         user_places=overlap_mod.user_places(build, waypoints) if waypoints else None,
+        stops=stops,
+        effort=effort,
+        highlights=highlights,
+        calendar=dream.calendar,
         overlap=shared,
         private=src.private,
     )

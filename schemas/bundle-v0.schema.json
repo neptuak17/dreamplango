@@ -3,7 +3,7 @@
     "BundleManifest": {
       "properties": {
         "schema_version": {
-          "default": "0.5",
+          "default": "0.6",
           "type": "string"
         },
         "run_id": {
@@ -81,6 +81,25 @@
       ],
       "type": "object",
       "title": "BundleManifest"
+    },
+    "CalendarFile": {
+      "properties": {
+        "season_year": {
+          "type": "integer"
+        },
+        "countries": {
+          "items": {
+            "$ref": "#/$defs/CountryCalendar"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "season_year",
+        "countries"
+      ],
+      "type": "object",
+      "title": "CalendarFile"
     },
     "CampsiteSeasons": {
       "properties": {
@@ -461,6 +480,58 @@
       ],
       "type": "string",
       "title": "ComponentKind"
+    },
+    "CountryCalendar": {
+      "description": "Holiday dates for one country (OpenHolidays). Missing years and countries stay missing (D37).",
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "public_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calendar year of the public-holiday dates; null: no data"
+        },
+        "public": {
+          "items": {
+            "$ref": "#/$defs/Holiday"
+          },
+          "type": "array"
+        },
+        "school_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Calendar year of the school-holiday dates; null: no data"
+        },
+        "school": {
+          "description": "Summer breaks are not in the source (11.4)",
+          "items": {
+            "$ref": "#/$defs/SchoolBreak"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "country",
+        "public_year",
+        "public",
+        "school_year",
+        "school"
+      ],
+      "type": "object",
+      "title": "CountryCalendar"
     },
     "Criterion": {
       "properties": {
@@ -1107,6 +1178,130 @@
       "type": "object",
       "title": "DreamSection"
     },
+    "EffortFile": {
+      "description": "What the pace model needs (11.6), compact and free so the teaser can time real days (D45).",
+      "properties": {
+        "step_m": {
+          "type": "number"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/EffortPart"
+          },
+          "type": "array"
+        },
+        "gaps": {
+          "items": {
+            "$ref": "#/$defs/EffortGap"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_m",
+        "parts",
+        "gaps"
+      ],
+      "type": "object",
+      "title": "EffortFile"
+    },
+    "EffortGap": {
+      "description": "A gap between ridden parts. An unfilled (missing) gap is counted as ridden in a plan (D50).",
+      "properties": {
+        "at_m": {
+          "type": "number"
+        },
+        "after_section": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "description": "ferry, public_transport, discontinuity, missing or unclassified",
+          "type": "string"
+        },
+        "straight_distance_m": {
+          "type": "number"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "at_m",
+        "after_section",
+        "type",
+        "straight_distance_m",
+        "basis",
+        "confidence"
+      ],
+      "type": "object",
+      "title": "EffortGap"
+    },
+    "EffortPart": {
+      "description": "Elevation and surface along one ridden part of the path, every `step_m` from `from_m`.",
+      "properties": {
+        "from_m": {
+          "type": "number"
+        },
+        "to_m": {
+          "type": "number"
+        },
+        "ele": {
+          "description": "Elevation (m) at from_m + i * step_m, the last at to_m; null where the terrain is unknown (straight-line placeholders, D37)",
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "surface": {
+          "description": "One letter per step: r road, c cycle path, g gravel, u unknown, f ferry (D36 classes)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_m",
+        "to_m",
+        "ele",
+        "surface"
+      ],
+      "type": "object",
+      "title": "EffortPart"
+    },
     "EuroVeloStatus": {
       "properties": {
         "development": {
@@ -1295,6 +1490,136 @@
       ],
       "type": "string",
       "title": "GapType"
+    },
+    "Highlight": {
+      "description": "Something worth seeing near the route (11.6), from the OSM features behind M3's themes.",
+      "properties": {
+        "id": {
+          "description": "OSM id, e.g. osm:n123",
+          "type": "string"
+        },
+        "kind": {
+          "description": "viewpoint, castle, ruins, monument, archaeological_site, fort, palace, city_gate, citywalls, manor, heritage, museum, attraction, gallery, beach, peak or pass",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "lon": {
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "at_m": {
+          "description": "Measure of the closest route point",
+          "type": "number"
+        },
+        "offset_m": {
+          "description": "Straight-line distance from the route",
+          "type": "number"
+        },
+        "ele": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Elevation tagged in OSM (peaks and passes)"
+        },
+        "wikidata": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wikipedia": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "OSM's wikipedia tag, e.g. 'fr:Pont du Gard'"
+        },
+        "unesco": {
+          "description": "Tagged as a UNESCO World Heritage site (heritage=1)",
+          "type": "boolean"
+        },
+        "rank": {
+          "description": "0-1: how notable, from its kind and tags; used to pick a day's top highlights",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "lon",
+        "lat",
+        "at_m",
+        "offset_m",
+        "ele",
+        "wikidata",
+        "wikipedia",
+        "unesco",
+        "rank"
+      ],
+      "type": "object",
+      "title": "Highlight"
+    },
+    "HighlightsFile": {
+      "properties": {
+        "highlights": {
+          "items": {
+            "$ref": "#/$defs/Highlight"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "highlights"
+      ],
+      "type": "object",
+      "title": "HighlightsFile"
+    },
+    "Holiday": {
+      "properties": {
+        "date": {
+          "description": "YYYY-MM-DD",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nationwide": {
+          "type": "boolean"
+        },
+        "regions": {
+          "description": "ISO 3166-2 codes where it applies, when not nationwide",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "date",
+        "name",
+        "nationwide",
+        "regions"
+      ],
+      "type": "object",
+      "title": "Holiday"
     },
     "LayerInfo": {
       "description": "A family of events along the route (e.g. surface), with its allowed categorical values.",
@@ -1862,6 +2187,37 @@
       "type": "object",
       "title": "RouteSummary"
     },
+    "SchoolBreak": {
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nationwide": {
+          "type": "boolean"
+        },
+        "regions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "name",
+        "nationwide",
+        "regions"
+      ],
+      "type": "object",
+      "title": "SchoolBreak"
+    },
     "ScoresFile": {
       "properties": {
         "rules_profile": {
@@ -2390,6 +2746,178 @@
       "type": "object",
       "title": "StatusShare"
     },
+    "Stop": {
+      "description": "A candidate overnight stop for Plan (11.6): the places to stay that count, grouped by the town they belong to.\n\nCounts only, never a place name, so the file can be free (D45).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Town or village; null when the beds are grouped by km only"
+        },
+        "place_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "OSM place=*: city, town or village; null when grouped by km"
+        },
+        "at_m": {
+          "description": "Where the rider leaves the route for the stop: its beds' median access point",
+          "type": "number"
+        },
+        "lon": {
+          "description": "The town's position, else the route at at_m",
+          "type": "number"
+        },
+        "lat": {
+          "type": "number"
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detour_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The shortest ridden distance from the route to one of its beds"
+        },
+        "beds": {
+          "items": {
+            "$ref": "#/$defs/StopBeds"
+          },
+          "type": "array"
+        },
+        "services": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Other counted places within reach of the stop along the route: food, water, atm, pharmacy, bike_shop, toilets",
+          "type": "object"
+        },
+        "station": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A bike-carrying station within bail-out reach of the stop"
+        },
+        "station_at_m": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "place_kind",
+        "at_m",
+        "lon",
+        "lat",
+        "country",
+        "detour_m",
+        "beds",
+        "services",
+        "station",
+        "station_at_m"
+      ],
+      "type": "object",
+      "title": "Stop"
+    },
+    "StopBeds": {
+      "description": "The places to stay of one kind at a stop, with their opening by month (D18), grouped by month code.",
+      "properties": {
+        "kind": {
+          "description": "Place kind: campsite, hotel, guest_house, hostel, hut or other",
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "seasons": {
+          "description": "[12-letter month code, how many of these beds have it]; '?' * 12 when nothing is published",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "count",
+        "seasons"
+      ],
+      "type": "object",
+      "title": "StopBeds"
+    },
+    "StopsFile": {
+      "properties": {
+        "season_year": {
+          "type": "integer"
+        },
+        "reach_m": {
+          "description": "Services count towards a stop within this distance of it along the route",
+          "type": "number"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/Stop"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "season_year",
+        "reach_m",
+        "stops"
+      ],
+      "type": "object",
+      "title": "StopsFile"
+    },
     "StretchStats": {
       "description": "Summary statistics over a stretch of route: the whole route, or one daily section.",
       "properties": {
@@ -2687,6 +3215,18 @@
     "user_places": {
       "$ref": "#/$defs/UserPlacesFile"
     },
+    "stops": {
+      "$ref": "#/$defs/StopsFile"
+    },
+    "effort": {
+      "$ref": "#/$defs/EffortFile"
+    },
+    "highlights": {
+      "$ref": "#/$defs/HighlightsFile"
+    },
+    "calendar": {
+      "$ref": "#/$defs/CalendarFile"
+    },
     "current": {
       "$ref": "#/$defs/CurrentPointer"
     }
@@ -2704,6 +3244,10 @@
     "dream",
     "ways",
     "user_places",
+    "stops",
+    "effort",
+    "highlights",
+    "calendar",
     "current"
   ],
   "type": "object",

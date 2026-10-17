@@ -19,6 +19,11 @@ export const BUNDLE_FILES = {
   services: "services.json",
   dream: "dream.json",
   user_places: "user_places.json",
+  // Plan (M4, 11.6): stops and effort are free, so the teaser can plan real days (D45).
+  stops: "stops.json",
+  effort: "effort.json",
+  highlights: "highlights.json",
+  calendar: "calendar.json",
 } as const;
 
 export type BundleFile = keyof typeof BUNDLE_FILES;

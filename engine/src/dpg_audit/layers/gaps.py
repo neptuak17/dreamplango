@@ -1,4 +1,9 @@
-"""Classify the gaps between published sections: ferry, public-transport link, small discontinuity or missing."""
+"""Classify the gaps between published sections: ferry, public-transport link, small discontinuity or missing.
+
+A gap is a ferry or a public-transport link only on evidence (D47, D50): an OSM ferry route with a terminal at each
+end, or a curated note citing the network's own advice. Rail stations near both ends are not evidence, so such a gap
+is "missing": the route is incomplete there, and a plan counts it as ridden.
+"""
 
 from dataclasses import dataclass
 
@@ -10,7 +15,6 @@ DISCONTINUITY_M = 300.0
 SMALL_GAP_M = 2_000.0
 FERRY_REACH_M = 2_500.0
 """A ferry route counts if one terminal lies this close to each end of the gap."""
-STATION_REACH_M = 3_000.0
 
 
 @dataclass
@@ -37,20 +41,7 @@ def _ferry_connects(coords: list[tuple[float, float]], a: tuple[float, float], b
     )
 
 
-def _nearest_station(lonlat: tuple[float, float], stations: list[dict]) -> tuple[float, dict | None]:
-    best, best_s = float("inf"), None
-    for s in stations:
-        if abs(s["lat"] - lonlat[1]) > 0.1 or abs(s["lon"] - lonlat[0]) > 0.15:
-            continue
-        d = distance(lonlat[0], lonlat[1], s["lon"], s["lat"])
-        if d < best:
-            best, best_s = d, s
-    return best, best_s
-
-
-def classify_gaps(
-    components: list[Component], ferries: list[dict], stations: list[dict], curated: list[CuratedGap]
-) -> list[dict]:
+def classify_gaps(components: list[Component], ferries: list[dict], curated: list[CuratedGap]) -> list[dict]:
     """Set gap_type/basis/confidence on gap components in place; return a note per gap for the findings."""
     by_after = {c.after_section: c for c in curated}
     notes = []
@@ -66,8 +57,6 @@ def classify_gaps(
         ferry = None
         if straight >= DISCONTINUITY_M:
             ferry = next((f for f in ferries if _ferry_connects(f["coords"], comp.start, comp.end)), None)
-        d0, s0 = _nearest_station(comp.start, stations)
-        d1, s1 = _nearest_station(comp.end, stations)
 
         if straight < DISCONTINUITY_M:
             comp.gap_type, comp.gap_basis, comp.gap_confidence = GapType.DISCONTINUITY, "distance", "high"
@@ -78,13 +67,10 @@ def classify_gaps(
             cur = by_after[after_section]
             comp.gap_type, comp.gap_basis, comp.gap_confidence = cur.type, "curated", "medium"
             note["curated_note"] = cur.note
-        elif d0 <= STATION_REACH_M and d1 <= STATION_REACH_M and straight > SMALL_GAP_M:
-            comp.gap_type, comp.gap_basis, comp.gap_confidence = GapType.PUBLIC_TRANSPORT, "rail_stations_nearby", "low"
-            note["stations"] = [s0.get("name") if s0 else None, s1.get("name") if s1 else None]
         elif straight <= SMALL_GAP_M:
             comp.gap_type, comp.gap_basis, comp.gap_confidence = GapType.DISCONTINUITY, "distance", "medium"
         else:
-            comp.gap_type, comp.gap_basis, comp.gap_confidence = GapType.MISSING, "no_ferry_or_rail_found", "medium"
+            comp.gap_type, comp.gap_basis, comp.gap_confidence = GapType.MISSING, "no_ferry_or_published_link", "medium"
         note["component"] = comp.id
         notes.append(note)
     return notes

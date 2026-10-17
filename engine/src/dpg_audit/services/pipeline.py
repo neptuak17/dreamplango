@@ -19,10 +19,12 @@ from dpg_audit.services.coverage import Coverage
 from dpg_audit.services.osm_places import RawPlace, read_osm_places
 from dpg_audit.services.policy import BikePolicy, CountryLookup
 from dpg_audit.services.profile import ServicesProfile
-from dpg_audit.services.seasons import UNKNOWN, month_codes, season_known
+from dpg_audit.services.seasons import UNKNOWN, day_codes, month_codes, season_known
 from dpg_audit.sources import dem, osm, overture
 
 BLOCK_M = 50_000.0
+DAY_SERVICES = {"food", "bike_shop", "pharmacy"}
+"""Services whose day-by-day opening Plan uses (11.6)."""
 DETAIL_TAGS = ("website", "contact:website", "phone", "contact:phone", "stars", "brand", "operator", "fee", "tents")
 
 
@@ -176,6 +178,11 @@ def build_places(
         detail = _detail(prim, m.members)
         if dist is None:
             detail["unreachable"] = True
+        hours = osm_rec.tags.get("opening_hours") if osm_rec else None
+        if hours and prim.service in DAY_SERVICES:
+            days = day_codes(hours, profile.season_year)
+            if days:
+                detail["days"] = days  # Plan: open on a given date (11.6)
         if prim.service == "station":
             row = policy.lookup(prim.kind, countries[i], prim.tags)
             detail.update(

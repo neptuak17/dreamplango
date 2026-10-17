@@ -99,6 +99,17 @@ describe("findStretches", () => {
     }
   });
 
+  it("counts an unfilled gap as ridden, with its terrain unknown (D50)", () => {
+    const d = dream(ten, [{ after_section: 5, type: "missing", straight_distance_m: 30_000, hard: false }]);
+    const [across] = findStretches(d, { ...base, days: 3, direction: "forward" }).filter((r) => r.first <= 5 && r.last >= 6);
+    expect(across).toBeDefined();
+    const sections = across!.last - across!.first + 1;
+    expect(across!.km).toBe(sections * 50 + 30);
+    expect(across!.gradeAtLeast).toBe(true);
+    expect(across!.climbUnknownKm).toBe(30);
+    expect(across!.watch.some((w) => w.includes("30 km gap in the route") && w.includes("counted as ridden"))).toBe(true);
+  });
+
   it("favours the chosen themes", () => {
     const [top] = findStretches(dream(ten), { ...base, themes: ["coast"] });
     expect(top?.first).toBe(1);
