@@ -2,7 +2,7 @@
 
 Formerly DreamPlanGo; renamed on 2026-10-17 (D42). Dream, Plan and Go remain the product's phases, and "dpg" remains the internal name of the audit process.
 
-**Status:** Living design, 2026-10-16. Decisions D1–D38 are recorded below, and milestones M0–M2 are built (section 11).
+**Status:** Living design, 2026-10-17. Decisions D1–D42 are recorded below. Milestones M0–M3.5 are built (section 11), and M4 is a draft for discussion (11.6).
 **Scope:** The Route Audit System (backend), the prototype web app used to exercise it, and the design choices that keep later phases open (iOS app, other route networks, user GPX audits, B2B reports, white-label partner widgets).
 
 ---
@@ -664,7 +664,7 @@ Milestones are ordered so you can see something in the browser early and tune as
 | **M2** ✅ 2026-10-14 | Services & access | Places conflation (OSM + Overture, which includes Foursquare: D16), seasonal opening, detour distances, stations + curated bike policy, services-gap and bail-out rules. Prototype: "what's ahead from km X" panel and services filters. See 11.2 and the M2 results in `docs/notes/eurovelo-gpx.md`. **Known limits, carried forward:** <ul><li>Opening seasons are published for only ~2% of accommodation (OSM; Overture has none), so seasonal gaps are mostly unknown. Candidate fixes: campsite directories, DATAtourisme for France, field reports.</li><li>No timetables yet (GTFS), so ECS service frequency is not checked; buses and taxis are not counted for bail-out.</li><li>Bike policy for Greece and Albania is unknown, and Türkiye's is low-confidence.</li><li>Ferry terminals count as bike-carrying by default (low confidence).</li><li>Climb to a place is net elevation difference, not the climb along the detour.</li><li>No cyclist-friendly labels (Accueil Vélo etc.) yet.</li></ul> |
 | **M3** ✅ 2026-10-16 | Dream data | Per daily section × month: ERA5 climate normals, daylight, wind along the route and direction advice, school and public holidays, tourism intensity, campsite seasons. Per section: eight scenery themes, remoteness, D36 grades and surface shares. Comfort and best-time scores; `dream.json`; the `@dpg/dream` matchmaker. Prototype: a Dream tab with the **best-time heatmap**, the **matchmaker** and a reality-check card, with the stretch highlighted on the map. Concept D35, rider levels D36, design in 11.4, results in `docs/notes/eurovelo-gpx.md`. **Known limits, carried forward:** <ul><li>The ERA5 grid fallback wasn't built: the point time series served all 73 EV8 points (about 20 minutes through the CDS queue on the first run, cached afterwards).</li><li>OpenHolidays leaves out summer school breaks, so June–September show no school-holiday data anywhere. 2027 school calendars are published only for France; the others use 2026, and the card says which year. Montenegro, Greece, Türkiye and Cyprus have no holiday data at all.</li><li>Crowding is national. Eurostat tourism intensity (2022–2025) covers all ten EV8 countries.</li><li>Campsite seasons are known for only about 4% of campsites; the rest is a "check yourself" item.</li><li>"Train at both ends" counts railway stations only. Ferry terminals don't count, unlike M2's bail-out rule.</li><li>Remoteness is the longest stretch, and the share of km, more than 5 km from a village or larger (11.4 first said 10 km for the longest stretch).</li><li>Where more than a quarter of a section is a straight-line placeholder (EV8 sections 45 and 53), terrain under the placeholder is unknown. The rest of the section is still measured: its climbing and grade are shown as minimums ("at least"), with the unknown km, and stretches sum them the same way. A minimum already over the rider's level still rules a stretch out. Section 53 is placeholder throughout, so its climbing is unknown and its grade uses distance alone. The mountains theme is "no data" for both. Shorter placeholders are flagged as approximate. M1's climbing figures follow the same rule, and Dream reuses them rather than measuring again.</li><li>Not built: ferry-crossing seasons, and the optional comfort strip row under the profile.</li><li>All weights and thresholds are untuned placeholders (D13).</li></ul> |
 | **M3.5** ✅ 2026-10-17 | User GPX audits | The full audit (M1–M3) on a route file the owner supplies, run from the laptop as a private audit (`npm run audit:file`): a general GPX reader and a "user" route source, stages of about 60 km, user places from waypoints (never counted), the overlap with public routes, private bundles kept until deleted (`npm run forget`), and a route switcher in the viewer. Bundle schema 0.5 (`ways.json`, `user_places.json`, manifest `visibility` and `overlap`). Decisions D39–D40, design in 11.5. Accepted on the owner's planned France–Spain route over the Pyrenees, whose results stay private (D25). **Known limits, carried forward:** <ul><li>Everything listed in 11.5, plus the following.</li><li>Stage ends with no town or village within 5 km are named by their km.</li><li>Overlap counts shared OSM ways, and less than 1 km is not reported: crossings and shared junctions are not a shared route.</li><li>Reusing a public route's routing tiles when they already cover the corridor is built, but not yet exercised: the acceptance route lies outside EV8's corridor.</li><li>Country extracts downloaded on different days are merged keeping each object's newest version (needed for the first route touching a newly downloaded country).</li></ul> |
-| **M4** | Plan | `packages/planner` with stage planner and riding-time model; annotated per-day GPX export; bridge suggestions for gaps. Prototype: plan a trip, compare plans. |
+| **M4** | Plan | `packages/planner` with stage planner and riding-time model; annotated per-day GPX export; bridge suggestions for gaps. Prototype: plan a trip, compare plans. **Draft design in 11.6, for discussion.** |
 | **M5** | Go simulation | Live providers (forecast grid by block, MeteoAlarm, CAMS, FIRMS/EFFIS, river gauges, closures registry, OSM change monitor). Prototype: **"simulate being at km X on date/time Y"**, showing the briefing a rider would see. Handoffs to other apps and sites (D41, list in 12). |
 | **M6** | Reports & calibration | HTML/PDF audit report, run-to-run diff viewer, calibration against a published ECS certification report (e.g. EV15) and against your own field rides. |
 
@@ -972,6 +972,257 @@ The file can live anywhere outside the repository. The command copies it into th
 - A file with only sparse route points (turn points) is approximate, and its long straight stretches are flagged.
 - Countries missing from the bike-carriage table show "unknown" bike policy (for example Andorra, if the route crosses it).
 - The first audit in a new area takes longer: downloads, tile building and the Copernicus queue. The France and Spain extracts are already on disk.
+
+### 11.6 M4 design: Plan (draft for discussion)
+
+**Draft, 2026-10-17.** Nothing here is agreed or built. The questions at the end come first. The owner's answers become decisions (D43 onwards), and this section is revised before any code.
+
+It builds on D35 (Dream ends with a choice), D36 (rider levels), D37 (unknowns), D41 (handoffs), principle 5 (the device knows the rider) and the Plan ideas in 12.
+
+#### What Plan is for
+
+Dream ends with a choice: a stretch of route, a month and a direction (D35). Plan turns that choice into days the rider can actually ride: where each day ends, where to sleep, eat and fill up with water, how hard each day is, and what to sort out before leaving.
+
+The rider should come out of Plan **excited and confident**: a solid plan, grounded in local knowledge, and a clear picture of what they are taking on. A plan is *ready* when it answers five questions:
+
+| The rider asks | Plan answers with |
+|---|---|
+| Can I do this? | Every day measured against the rider's level, in hours as well as km and climbing; the hard days named, and why |
+| Where do I sleep each night? | A stop for every night, the beds we know of there, what's known about their season, and a plan B |
+| What could go wrong? | The few real risks on these days, each with a fallback: a shorter day, a detour, a train |
+| What do I sort out before I go? | A short to-do list: book, call, check, getting there and back, kit |
+| What will it be like? | The character of each day, its highlights, and the typical weather for the month |
+
+**What "local knowledge" means today.** It is the audit: OSM, Overture, the terrain, the ECS-style checks, climate, holidays and the bike-carriage table, each with its source and date. Rider reports (Go, 12) and partners' own notes (D29) may add to it later. We have no prices, reviews or photos, so Plan never ranks a bed by quality.
+
+Riders come first. Hikers are kept in mind in the interfaces (question 14).
+
+#### Not a wall of facts
+
+For a 7-day stretch of EV8 the audit holds about 40 findings and some 9,000 places, 1,400 of them places to stay, plus layers for every km and 12 months of climate. Shown as they are, they would bury the few things that matter. So Plan never shows the audit as it is: it **turns facts into plan items**, ranks them, and shows a few at a time.
+
+1. **Start from a draft, not a form.** After a few questions (below), the planner builds a complete plan by itself. The rider adjusts by exception: move a stop, add a rest day, lock a booked night. Nothing has to be configured to get a useful answer.
+2. **Each relevant fact becomes one of four kinds of plan item:**
+
+   | Kind | Means | Example |
+   |---|---|---|
+   | **Your call** | A decision only the rider can make, with the options worked out | "Day 3 is 104 km, beyond Moderate: split it (+1 day), stop 16 km earlier and make day 4 longer, or keep it." |
+   | **Before you go** | Something to do at home, with a handoff where there is one (D41) | "The campsite at the end of day 4 publishes no October dates: call to check." |
+   | **Heads-up** | Something to know on the day, at a km | "km 412–418: 6 km on a busy road with no shoulder." |
+   | **Highlight** | Something to look forward to | "A viewpoint 1 km off the route at km 233." |
+
+   Unknowns (D37) become "before you go" checks, grouped and placed where they matter, not repeated on every day.
+3. **Only what matters to this rider.** An item surfaces only if it falls on the rider's days (stretch, direction, dates) and crosses *their* thresholds (level, surfaces to avoid, how they sleep, their bike). An 8% climb is a heads-up for a Leisurely rider, not for a Tough one. Two km at LTS 3 matter to a rider who said "avoid busy roads".
+4. **A budget of attention, at three depths.** The trip (its brief), the day (its card) and the evidence (the audit's own tabs, a click away). The brief shows at most 5 key things; a day card at most 3 heads-ups and 3 highlights. They are ranked: safety, then a bed and water, then effort, then comfort, then interest. The rest sit behind "7 more".
+5. **Numbers in the rider's own terms.** Not "1,240 m of climbing" but "1,240 m: your biggest day, about twice your usual". Hours and clock times sit beside km: "about 5 h riding, 6 h 30 with stops; in by 15:30, sunset 18:52".
+6. **A story before the data.** Each day gets one line of character, written from templates over the data: "Flat, mostly cycle path, lagoons all day; one busy stretch into town." Every phrase traces to data, and tapping it shows the evidence. Later, D38's assistant may write these lines, under the same rule.
+7. **Every automatic choice says why,** in a line: "Stopping here: 2 hotels and a campsite, 1 known open in October; a station; makes a 62 km day."
+8. **End on the adventure, not the admin.** The brief opens with the trip's shape and highlights; the to-do list comes last.
+
+**Findings and plan items stay apart.** Findings belong to the route and are the same for everyone. Plan items belong to one rider's plan, are computed on the device, and never leave it.
+
+#### How the rider is guided
+
+```
+ Dream result ─► 1 A few      ─► 2 The draft  ─► 3 Your calls   ─► 4 Make it yours ─► 5 Before you go
+ (stretch,        questions       trip brief      the 2–5            optional: move     to-do list,
+  month, way,     (only what      and day         decisions only     stops, rest days,  exports,
+  days, level)    Dream didn't    cards           the rider can      lock booked        sharing
+                  ask)                            make               nights
+```
+
+1. **A few questions**, each with a default, asked only because they change the plan:
+   - the start date (or just the month, which leaves weekdays, holidays and sunset times out);
+   - how you sleep: camping, rooms or a mix;
+   - your day: start time, and how long you like to stop;
+   - flat cruising speed with luggage, preset from the level (D36), or "learn it from a ride I did" (below);
+   - the bike: road, touring or gravel (surfaces to avoid carry over from Dream);
+   - rest days: none, or one every N days.
+2. **The draft**: the trip brief and the day cards (below). A readiness line sums it up: "Ready to go: a bed every night, every day within your level, 3 checks before you leave", or "2 things need your call".
+3. **Your calls**, one at a time. Each comes with its options worked out by the planner, and with what each option changes: days, the hardest day, nights without a known-open bed.
+4. **Make it yours**: drag a stop along the profile or the map, pick another stop from that night's alternatives, add a rest day, lock a night once it's booked. The planner re-plans the unlocked days around it at once.
+5. **Before you go**: the to-do list with its handoffs, the exports and sharing.
+
+#### The plan, as the rider sees it
+
+Layout sketches only: the places and figures below are made up, not audit results.
+
+**Trip brief**: one screen saying what the rider is taking on.
+
+```
+ EV8 · Agde → Arles · 6 days · Wed 13 – Mon 18 Oct 2027 · eastbound
+ 352 km · 1,100 m climbing · Moderate · hardest: day 4, 74 km, about 5 h 20 riding
+
+ Effort per day      ▃ ▅ ▃ ▇ ▂ ▄    ── your usual day
+ Mid-October here    typically 21 °C highs, rain on 1 day in 5, light tailwind most days
+
+ Ready to go, with 1 call to make and 6 checks before you leave
+   Your call   Day 4 finishes after sunset at your pace: start at 08:30, or stop 14 km earlier
+   Check       4 of 5 nights rely on places that publish no October dates
+   Heads-up    Day 5 is a Sunday: 1 of the 5 food places with known hours is open
+
+ Highlights      the Sète lido · Camargue flamingos · the walls of Aigues-Mortes
+ How well we know these days    surfaces 92% · bed seasons 6% · food opening hours 11%
+
+ Day 1  Wed 13  Agde → Palavas           52 km   60 m   3 h 10   easy start
+ Day 2  Thu 14  Palavas → Aigues-Mortes  38 km   20 m   2 h 20   1 check
+ …
+```
+
+**Day card**: one per day. Selecting it focuses the map, profile and strip on that day.
+
+```
+ Day 1 · Wed 13 Oct · Agde → Palavas-les-Flots · 52 km · 60 m · an easy start
+ 3 h 10 riding (3 h 00–3 h 35: surface unknown on 7 km) · 4 h 15 with stops · in by 13:15 · sunset 19:05
+ "Cycle paths between the sea and the Étang de Thau, through Sète, then lagoons to Palavas."
+ [elevation profile]  [surface strip]
+ Water and food   km 4 · 18 (Sète) · 27 · 41 · longest gap 14 km
+ Heads-up         km 19–21: busy road through Sète
+ Highlights       the Sète lido · Mont Saint-Clair viewpoint, 1 km off the route
+ Sleep            Palavas: 9 beds of your kind, 2 known open in October · plan B: Frontignan, 14 km back
+ Bail-out         stations at Sète, Frontignan, Vic-Mireval
+```
+
+A rest day gets a card too: the town, what our places show there (food, bike shop, pharmacy, ATM) and its highlights.
+
+#### Riding time and effort
+
+Plan measures a day in **hours**, as well as km and climbing, because hours are how a rider lives a day: a flat 60 km and a mountain 40 km can make the same day.
+
+- **The model** (12): rider, bike and luggage mass; a comfortable power; rolling resistance by surface; gradient; and the month's typical wind along the route (M3). It is solved per 100 m of the profile, with a cap on descending speed (lower on gravel) and walking pace where a climb is too steep for the rider's level.
+- **Inputs riders can answer.** Few riders know their power, so the default question is *flat cruising speed with luggage*, preset from the level (D36), and the model derives power from it. Riders who know their power can give it instead. **Optionally, "learn from a ride I did":** the rider picks one of their own recorded rides (GPX, later FIT), and the device fits their speed against gradient and surface. The file never leaves the device.
+- **Presets are tuned to the levels:** the middle of each level's band (e.g. Moderate, about 65 km and 600 m) should take roughly 4–5 h of riding. Placeholders, like D13.
+- **Stops:** a share of riding time plus a lunch stop, by level and adjustable, always shown apart: "5 h riding, 6 h 30 with stops".
+- **Unknowns give a range, never a guess (D37).** Where the surface is unknown, the day is timed both as paved and as gravel, and shown as a range with its reason ("surface unknown on 7 km"). Where climbing is unknown (straight-line placeholders, D37), the time is "at least". The planner plans on the slow end, so the plan still holds if the unknown turns out rough.
+- **Daylight for the actual dates:** sunrise, sunset and civil twilight (`suncalc`, 6.3). A day that would end after sunset becomes a "your call".
+- **Effort against the level:** each day is *within your level*, *a harder day* (up to about 20% over the D36 band in km, climbing or hours) or *beyond your level*. Three harder days in a row bring a suggestion: a rest day, or a shorter day.
+- **Activity-neutral by design:** the model sits behind one interface (`pace(segment, rider) → seconds`), so a walking model (Tobler's or Naismith's rule) can join it later (question 14).
+
+#### Stops and the stage planner
+
+- **Candidate stops.** Places to stay that count (D17: within 5 km or 30 min of the route) are grouped into stops: by the town or village they belong to, otherwise by their access point on the route. A stop keeps its beds by kind, how many are known open, partly open or unknown in the plan's month (D18), and what else is there: food, ATM, pharmacy, bike shop, station. Places closed that month (`c`) don't count. A stop where nothing is known to be open is still a stop, flagged; it is never assumed open or closed.
+- **The planner** chooses one stop per night by dynamic programming over the candidates in route order (12). A day costs more the further its hours are from the rider's usual day (more when over than under), and much more when it breaks a hard limit (beyond the level, ending after sunset). A stop is worth more with more known-open beds of the rider's kind, food and a station. Rest days go at stops with services. Locked nights are fixed points, and the rest re-plans around them. A week's stretch has a few hundred candidates, so this takes milliseconds on the device.
+- **Number of days:** Dream's, by default. When one day more or fewer makes the plan clearly better (no day beyond the level, fewer nights with nothing known open), the planner offers it as a "your call".
+- **The planner picks the stop; the rider picks the bed.** Each stop lists its beds, known-open first, then by detour, with what we know: kind, season, stars where tagged, and the phone and website for D41's handoffs. Never ranked by quality. The rider may mark one as chosen or booked. Only about 15% of EV8's places to stay have a phone number in our data, and 58% a website, so many checks will be "see it in Google or Apple Maps" (D41).
+- **A plan B for every night:** the nearest other stop before and after, with what the change costs ("the next stop, 9 km on: day 3 becomes 61 km").
+
+#### Bridges: plan B for the bad bits
+
+The audit already classifies gaps (4.4): unsafe (LTS 4), missing or undeveloped links, seasonal ferries, surfaces the bike can't ride. Plan turns each gap on the rider's days into a "your call" with options:
+- **ride it as it is**, saying what that means;
+- **a train or ferry hop** between two stations that carry bikes (M2 stations, the bike-carriage table, D20). Without timetables we don't know that a service runs between them, so the option says so and hands off to the operator's journey planner (D41);
+- **a routed alternative**: a low-stress line around the gap, audited with the same layers (surface, traffic stress, climbing).
+
+Routing stays in the batch audit (D4). Routed alternatives are therefore computed by the engine for every qualifying gap and stored in the bundle as variant components (4.4), not on the device. That is M4's main engine work, and it can be split off (question 6).
+
+#### Plan rules: where the items come from
+
+Plan items come from a small, readable set of plan rules in `packages/planner`, with their thresholds in one file to tune, like D13. Each rule reads the plan and the bundle, and emits items with a kind, a day, a km or range, a short title, why it matters to this rider, a severity, the evidence (finding, place and event ids) and an optional handoff. The first rules:
+
+| Rule | Emits | From |
+|---|---|---|
+| A day over the level; ending after sunset; three harder days in a row | Your call | Pace model, daylight |
+| No known-open bed at a stop; only one bed | Before you go (check or book); plan B | Places and seasons (D18) |
+| Book ahead: few beds, on a night of peak crowding or school holidays | Before you go | Places; M3 crowding and holidays |
+| A water or food gap longer than the rider's threshold, tighter in heat | Heads-up, or your call where there's an option | M2 places, M3 climate |
+| Food places on the day closed on that date (weekday, public holiday) | Heads-up about the known part only (D37): just 11% of EV8's food places publish hours | OSM `opening_hours` (JS library, 6.3), holiday dates |
+| A busy road, a surface the rider avoids, steps, a steep 500 m | Heads-up, or your call with a bridge | M1 findings and layers |
+| A gap with bridges | Your call | Bridges |
+| A long stretch without a bike-carrying station | Heads-up | M2 bail-out |
+| A ferry or border crossing | Before you go: check the timetable or the documents | Route breaks, countries |
+| The day's biggest climb; the trip's high point | Highlight (and a heads-up at lower levels) | M1 climbs (FIETS) |
+| Viewpoints, heritage, beaches, passes | Highlight | The OSM features behind M3's themes |
+| Getting to the start and home again | Before you go: the rail operator's planner from the end stations, with the bike note | M2 stations, D20, D41 |
+| Missing data on these days | Before you go: check yourself (D37), grouped | Every gap behind the plan |
+
+Ranking and the caps come after the rules. The rider can tick a to-do as done, or dismiss a heads-up ("I know"), and it stays that way. The same items feed the exports and the GPX waypoints, and later the D38 assistant and the Go briefing (M5).
+
+#### Presenting the plan to others
+
+| Who | What they get | How |
+|---|---|---|
+| **The rider, on the road** (until Go, M5) | A **trip book**: the brief, then a page per day (map, profile, water and food, heads-ups, sleep and plan B, bail-out) | The browser's print view, saved as PDF; needs no signal |
+| **Bike computers and route apps** | **GPX per day and for the whole trip**: the track, with waypoints for the night's stop, water and food, heads-ups, highlights and bail-out stations, within the same attention budget; bridges as alternative tracks | Download; later the share sheet and Ride with GPS upload (12, D41) |
+| | Later, **FIT courses**, whose course points Garmin shows as alerts ahead | A FIT writer (D22 lists only the reader) |
+| **Riding partners** | The whole plan, read-only, or an imported copy to adjust on their own device | A share link (below) |
+| **Family and friends at home** | "Where I'll be": dates and nightly stops only | A share link at itinerary level; a calendar file |
+| **Calendars** | One all-day event per day, e.g. "Day 1: Agde → Palavas, 52 km", with the stop as its location | An `.ics` file, built on the device |
+| **Other Kilometrica clients** | The plan document itself, e.g. planned on a partner's site, then ridden with the app (D29) | `plan.json` (below) |
+
+**The plan document** is a small JSON file with its own schema (`schemas/plan-v0.schema.json`, generated like the bundle's). It holds the route and the audit run it was made on, the direction, the start date, the days (ride or rest, from and to km, the stop, a chosen bed), locked nights, the calls made, item states and the rider's notes. The rider's inputs are kept with it, so it re-plans the same way. Computed values are not stored, because they are recomputed from the bundle. Exports meant for apps without the bundle (GPX, `.ics`, the trip book) carry them.
+
+**Pinned to an audit run.** Bundles are immutable (principle 7), so a plan names the run it was made on. When a newer audit is published, the planner can say "since you made this plan: a campsite on night 4 has closed; a new finding on day 2". That diff can wait for M5, but the pin goes in now.
+
+**Sharing without accounts (9.4).** On a public route, the plan document is a few kilobytes. Compressed, it fits in the link's fragment (after `#`), which browsers never send to a server: the link *is* the plan, and nothing is stored anywhere. Anyone holding the link can read it. A link has one of two levels: the full plan, or the itinerary only. A plan on a private route (D25) can't travel that way, because the recipient would also need the route. For now it is shared as a file (route plus plan), and later as an end-to-end encrypted blob (9.4).
+
+#### Where it runs, and privacy
+
+- **`packages/planner`** (TypeScript, pure, 6.5) holds the pace model, candidate stops, the stage planner, the plan rules, the plan document, share links and exports. It has no network access: it takes bundle data and the rider's inputs, and returns a plan. It runs in the browser now (prototype and partner widget, D29) and is small enough to port to Swift (6.1).
+- **The rider's inputs and plans stay on the device** (principle 5): in browser storage in the prototype, on the phone (and the rider's iCloud) later. A file export is the backup.
+- **Data for the stretch is fetched by 50 km block** (D31), so the server learns at most which blocks were looked at, as with live data (7.2). With the offline pack (Trip Pass), nothing is fetched.
+
+#### Engine and bundle changes
+
+| Change | Why |
+|---|---|
+| `settlements.json`: towns and villages along the route (name, `at_m`, offset, place type) | Naming days, grouping beds into stops (M3.5 already names stages this way) |
+| `highlights.json`: the OSM features behind M3's themes (viewpoints, heritage, peaks and passes, beaches), with `at_m` and any `wikidata` or `wikipedia` tag | Highlights, and a "see photos" handoff (question 9) |
+| `calendar.json`: public holiday dates and school holiday periods per country, where known | Heads-ups by date; M3 keeps only monthly counts |
+| Bridges: routed alternatives and station hops per qualifying gap, as variant components with their own layers | "Your call" options for gaps (4.4, D4) |
+| Bundle schema 0.6, contracts regenerated | |
+
+#### Prototype viewer
+
+- **A Plan tab**, opened from a Dream result ("Plan this stretch") or from a range picked on any route, public or private (M3.5).
+- The questions; then the trip brief, readiness line, your calls and day cards. Selecting a day focuses the map, profile and strip on it, with its stop and plan items drawn there.
+- Stops can be dragged along the profile or picked from each night's alternatives; rest days added; nights locked.
+- **Compare plans** (M4's deliverable): two or three plans side by side, e.g. 6 or 7 days, camping or rooms, either direction. A short table shows what differs: days, the hardest day, total hours, nights without a known-open bed, open calls, busy km.
+- Before you go: the to-do list, the exports (GPX, `.ics`, `plan.json`, print view) and the share link.
+- Plans are saved in the browser, and export and import as files.
+
+#### Build order and checks (once the questions are settled)
+
+1. The pace model, with unit tests on synthetic profiles: the presets give the intended hours for each level's middle day, and unknown surfaces give ranges.
+2. Engine: the settlements, highlights and calendar files; schema 0.6; contracts.
+3. Candidate stops and the stage planner, tested on synthetic routes and an EV8 stretch.
+4. Plan rules, ranking and caps, with a golden plan for the owner's case.
+5. Viewer: the Plan tab, trip brief, day cards, your calls, moving and locking stops, compare.
+6. Exports and sharing: GPX, `.ics`, `plan.json`, the print view, share links.
+7. Bridges in the engine, with their "your call" options (or later, per question 6).
+8. **Acceptance:**
+   - the owner's Dream case ("7 days in October, Moderate, prefers cycle paths, coast and villages, train at both ends") opens in Plan with a sensible draft: no day beyond the level, a stop every night, and a handful of calls and checks, not dozens;
+   - someone new to the trip can say what it asks of them from the trip brief alone;
+   - the owner's Pyrenees route (private) plans the same way;
+   - the day GPX files load in Garmin Connect and Ride with GPS with readable waypoints (checked by the owner on a device);
+   - a share link opens read-only in another browser, and the itinerary level shows only dates and stops;
+   - all tests and lint pass.
+
+#### Not in M4
+
+- Booking, prices and reviews: handed off (principle 8).
+- Timetables (D20): station hops say "check times" and hand off.
+- Forecasts: Plan uses climate normals; forecasts belong to Go (M5).
+- Wild camping as a candidate stop (question 5).
+- Hiking: the interfaces leave room for it, but nothing is built (question 14).
+- Several routes in one trip; editing one plan together.
+- The D38 assistant for Plan.
+
+#### Questions for the owner
+
+1. **Where Plan starts.** Only from a Dream result, or also from any range the rider picks on a route, including a whole private route? *Proposed: both.*
+2. **Number of days.** Fixed from Dream, or may the planner offer a day more or fewer when that's clearly better? *Proposed: Dream's number, with ±1 offered as a "your call".*
+3. **Pace input.** Is flat cruising speed with luggage, preset from the level, the right default question? Is "learn from a ride I did" worth building in M4? *Proposed: yes to both, with power as an option.*
+4. **Dates.** Ask for a start date, so weekdays, holidays, opening hours and sunset can be used? *Proposed: ask, but allow the month alone.*
+5. **Sleep.** Camping, rooms or a mix; and wild camping? *Proposed: no wild-camping candidates in M4 (its legality varies by country and the data is thin), but the rider may place "my own spot" by hand, which counts as no known bed.*
+6. **Bridges in M4.** Routed alternatives are the main engine task. Include them, or ship the planner with train and ferry hops first and add routed alternatives as M4.5? *Proposed: hops in M4, routed alternatives in M4.5.*
+7. **The attention budget.** Are 5 key things per trip, and 3 heads-ups and 3 highlights per day, about right, with everything else a click away? *Proposed: yes, as tunable placeholders.*
+8. **Kit advice.** A small set in M4, each with its "why": water to carry (from the longest gap and the heat), lights (from tunnels and sunset), tyre width (from the surface mix). Or later, with packing lists? *Proposed: those three in M4.*
+9. **Highlights without photos (D35).** May highlights link out to Wikipedia or Wikimedia Commons through OSM's `wikidata` tags, as a handoff? *Proposed: yes; we host no images.*
+10. **Beds and booking.** Beyond call, website and "see it in Google or Apple Maps" (D41), a plain booking-site search for the town and night, with no affiliate code? *Proposed: not yet; it waits for D41's question about affiliate links and impartiality.*
+11. **Sharing.** Is a read-only link at two levels (full plan, itinerary) enough for M4, with partners importing their own copy? And what may someone without a Trip Pass see in a shared plan? *Proposed: yes; they see the plan's own content (days, stops, chosen beds, plan items), not the rest of the audit.*
+12. **Exports in M4.** GPX, `.ics`, `plan.json` and the print view now; FIT courses and Ride with GPS upload with M5's handoffs? *Proposed: yes.*
+13. **Free and paid.** D35 puts Plan behind the Trip Pass. Should the draft's outline (days, towns, km, hours, effort) be free, as a teaser? *Proposed: yes; beds, plan items, exports and sharing need the pass. The prototype shows everything.*
+14. **Hikers.** Keep M4 to cycling, with activity-neutral interfaces (pace model, levels, thresholds, travel mode), and make walking its own later milestone? Walking needs more than a planner: walking networks, matching on foot, walking levels, and different service and access limits. *Proposed: yes.*
 
 ---
 
