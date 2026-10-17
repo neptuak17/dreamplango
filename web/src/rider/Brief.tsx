@@ -26,7 +26,7 @@ export function EffortChart({ plan, selected, onPick }: { plan: PlanResult; sele
   );
 }
 
-export function Brief({ plan, onLine }: { plan: PlanResult; onLine: (topic: string) => void }) {
+export function Brief({ plan, onLine, free = false }: { plan: PlanResult; onLine: (topic: string) => void; free?: boolean }) {
   const b = plan.brief;
   return (
     <section className="brief">
@@ -42,7 +42,7 @@ export function Brief({ plan, onLine }: { plan: PlanResult; onLine: (topic: stri
             <dt>{l.question}</dt>
             <dd>
               {l.answer}
-              {l.more > 0 && (
+              {l.more > 0 && !free && (
                 <button type="button" className="more" onClick={() => onLine(l.topic)}>
                   +{l.more} more ›
                 </button>

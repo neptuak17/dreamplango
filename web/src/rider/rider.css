@@ -285,6 +285,7 @@
 .seg button.on {
   background: var(--selected);
   border-color: var(--accent);
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -437,7 +438,7 @@
 .day-list button {
   width: 100%;
   display: grid;
-  grid-template-columns: 50px 42px 1fr auto auto 10px auto;
+  grid-template-columns: 50px 42px minmax(0, 1fr) 54px 48px 10px 24px;
   gap: 6px;
   align-items: center;
   text-align: left;
@@ -736,7 +737,7 @@
   }
 
   .day-list button {
-    grid-template-columns: 46px 1fr auto 10px;
+    grid-template-columns: 46px minmax(0, 1fr) 54px 10px;
   }
 
   .day-list .d-date,

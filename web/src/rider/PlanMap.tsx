@@ -78,6 +78,7 @@ export function PlanMap({ geometry, plan, selectedDay, onSelectDay, attribution 
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const ready = useRef(false);
+  const userMoved = useRef(false);
   const trip = useMemo(() => tripFeatures(geometry, plan), [geometry, plan]);
   const items = useMemo(() => itemFeatures(geometry, plan, selectedDay), [geometry, plan, selectedDay]);
   const latest = useRef({ trip, items, selectedDay, onSelectDay });
@@ -95,7 +96,24 @@ export function PlanMap({ geometry, plan, selectedDay, onSelectDay, attribution 
     m.addControl(new NavigationControl({ showCompass: false }), "top-right");
     m.addControl(new ScaleControl({ unit: "metric" }), "bottom-left");
     m.addControl(new AttributionControl({ compact: true, customAttribution: attribution }), "bottom-right");
+    // Start with the attribution collapsed to its (i) button; it expands on click.
+    const el = container.current;
+    const collapse = () => el.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+    collapse();
+    m.once("load", collapse);
     map.current = m;
+    // On a phone the map is created hidden and shown when a day opens: re-frame the selection whenever it resizes,
+    // until the rider pans or zooms it themselves.
+    const frame = () => {
+      if (userMoved.current) return;
+      const { trip: t, selectedDay: day } = latest.current;
+      const b = boundsOf(t.days, day) ?? boundsOf(t.days, null);
+      if (b) m.fitBounds(b, { padding: 40, maxZoom: 13, animate: false });
+    };
+    m.on("movestart", (e) => {
+      if ((e as { originalEvent?: Event }).originalEvent) userMoved.current = true;
+    });
+    m.on("resize", frame);
     m.once("style.load", () => {
       const { trip: t, items: it } = latest.current;
       m.addSource("route", {
@@ -186,6 +204,7 @@ export function PlanMap({ geometry, plan, selectedDay, onSelectDay, attribution 
   useEffect(() => {
     const m = map.current;
     if (!m) return;
+    userMoved.current = false; // a new selection frames the map again
     const apply = () => {
       if (m.getLayer("day-selected")) m.setFilter("day-selected", ["==", ["get", "day"], selectedDay ?? -1]);
       const b = boundsOf(trip.days, selectedDay) ?? boundsOf(trip.days, null);

@@ -789,6 +789,7 @@ export function App() {
               }}
               result={dreamResult}
               onResult={setDreamResult}
+              routeKey={routeKey(bundle.manifest.route)}
             />
           )}
           {bundle && tab === "ahead" && aheadM === null && (

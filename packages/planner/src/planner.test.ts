@@ -231,6 +231,16 @@ describe("makePlan", () => {
     expect(base.nights.map((n) => n.stop.id)).not.toContain(undefined);
   });
 
+  it("keeps a locked night with no bed of the rider's kind, and plans the rest around it", () => {
+    const stops = Array.from({ length: 29 }, (_, i) =>
+      stop((i + 1) * 10, (i + 1) * 10 === 120 ? { beds: [{ kind: "hotel", count: 1, seasons: [["????????????", 1]] }] } : {}),
+    );
+    const p = makePlan(data({ stops }), inputs({ sleep: "camping" }), { ...NO_CHOICES, locked: { 1: "s120" } });
+    expect(p.nights[1]!.stop.id).toBe("s120");
+    expect(p.nights.every((n) => !n.stop.id.startsWith("none-"))).toBe(true);
+    expect(p.items.some((i) => i.id === "bed:none:1")).toBe(true);
+  });
+
   it("checks beds whose season is unknown, and knows when no bed of the rider's kind exists", () => {
     const rooms = makePlan(data(), inputs({ sleep: "rooms" }));
     expect(rooms.items.filter((i) => i.id.startsWith("bed:check:"))).toHaveLength(4); // hotels publish no dates
@@ -329,6 +339,7 @@ describe("exports", () => {
     expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(6);
     expect(ics).toContain("DTSTART;VALUE=DATE:20271013");
     expect(ics).toContain("rest day");
-    expect(ics.split("\r\n").every((l) => l.length <= 75)).toBe(true);
+    const bytes = (l: string) => [...l].reduce((a, ch) => a + (ch.codePointAt(0)! < 0x80 ? 1 : ch.codePointAt(0)! < 0x800 ? 2 : 3), 0);
+    expect(ics.split("\r\n").every((l) => bytes(l) <= 75)).toBe(true);
   });
 });

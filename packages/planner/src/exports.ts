@@ -76,7 +76,13 @@ export function slice(geo: Geometry, fromM: number, toM: number): [number, numbe
     for (let i = 0; i < ms.length; i++) if (ms[i]! > lo && ms[i]! < hi) pts.push(line.coords[i]!);
     const last = locate({ lines: [line], gaps: [] }, Math.min(hi, ms[ms.length - 1]!));
     if (last) pts.push(last);
-    if (pts.length >= 2) segs.push(pts);
+    if (pts.length < 2) continue;
+    // The route's lines meet end to end between its sections, or nearly (digitising breaks under ~300 m, like the
+    // audit's): join them, so only a real gap breaks the track.
+    const prev = segs[segs.length - 1];
+    const end = prev?.[prev.length - 1];
+    if (prev && end && Math.abs(end[0] - pts[0]![0]) < 0.0035 && Math.abs(end[1] - pts[0]![1]) < 0.0027) prev.push(...pts);
+    else segs.push(pts);
   }
   if (toM < fromM) return segs.reverse().map((s) => s.reverse());
   return segs;
@@ -108,7 +114,7 @@ function dayWaypoints(plan: PlanResult, geo: Geometry, d: DayPlan): Waypoint[] {
     if (i.fromM === null) continue;
     const p = at(i.fromM);
     if (!p) continue;
-    out.push({ lon: p[0], lat: p[1], name: short(i.title), desc: i.why, sym: i.kind === "highlight" ? "Scenic Area" : "Danger Area" });
+    out.push({ lon: p[0], lat: p[1], name: short(i.short ?? i.title), desc: `${i.title}. ${i.why}`, sym: i.kind === "highlight" ? "Scenic Area" : "Danger Area" });
   }
   return out;
 }
@@ -179,14 +185,27 @@ function icsText(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
+const octets = (ch: string) => {
+  const c = ch.codePointAt(0)!;
+  return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+};
+
+/** Lines of at most 75 octets, continued with a space (RFC 5545 3.1), never splitting a character. */
 function fold(line: string): string {
   const out: string[] = [];
-  let rest = line;
-  while (rest.length > 74) {
-    out.push(rest.slice(0, 74));
-    rest = ` ${rest.slice(74)}`;
+  let cur = "";
+  let size = 0;
+  for (const ch of line) {
+    const n = octets(ch);
+    if (size + n > 75) {
+      out.push(cur);
+      cur = " ";
+      size = 1;
+    }
+    cur += ch;
+    size += n;
   }
-  out.push(rest);
+  out.push(cur);
   return out.join("\r\n");
 }
 

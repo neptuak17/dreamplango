@@ -19,7 +19,9 @@ import type { FreeData, FullData, Geometry } from "@dpg/planner";
 import type { PathCollection } from "../api";
 
 export const BLOCK_M = 50_000;
-const FULL_SERVICES = ["accommodation", "food", "water", "station", "bike_shop", "pharmacy", "atm", "toilets"];
+/** Beds, water and food that count (D17), and stations within bail-out reach (10 km). */
+const COUNTED_SERVICES = ["accommodation", "food", "water"];
+const BAIL_OUT_M = 10_000;
 
 async function get<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -87,26 +89,21 @@ export async function loadFull(network: string, ref: string, runId: string, from
   const base = `/v1/routes/${network}/${ref.toLowerCase()}`;
   const lo = Math.floor(Math.min(fromM, toM) / BLOCK_M) * BLOCK_M;
   const hi = Math.ceil(Math.max(fromM, toM) / BLOCK_M) * BLOCK_M;
-  const q = new URLSearchParams({
-    run: runId,
-    from_km: String(lo / 1000),
-    to_km: String(hi / 1000),
-    service: FULL_SERVICES.join(","),
-    max_detour_m: "10000",
-    limit: "20000",
-  });
-  const [findings, highlights, scores, services, places] = await Promise.all([
+  const query = (extra: Record<string, string>) =>
+    new URLSearchParams({ run: runId, from_km: String(lo / 1000), to_km: String(hi / 1000), limit: "20000", ...extra });
+  const [findings, highlights, scores, services, counted, stations] = await Promise.all([
     get<FindingsFile>(`${base}/findings?run=${runId}`),
     get<HighlightsFile>(`${base}/highlights?run=${runId}`).catch(() => ({ highlights: [] })),
     get<ScoresFile>(`${base}/scores?run=${runId}`),
     get<ServicesFile>(`${base}/services?run=${runId}`),
-    get<{ places: Place[]; truncated: boolean }>(`${base}/places?${q}`),
+    get<{ places: Place[]; truncated: boolean }>(`${base}/places?${query({ service: COUNTED_SERVICES.join(","), counting: "1" })}`),
+    get<{ places: Place[]; truncated: boolean }>(`${base}/places?${query({ service: "station", max_detour_m: String(BAIL_OUT_M) })}`),
   ]);
   return {
-    truncated: places.truncated,
+    truncated: counted.truncated || stations.truncated,
     full: {
       findings: findings.findings,
-      places: places.places,
+      places: [...counted.places, ...stations.places],
       highlights: highlights.highlights,
       climbs: scores.climbs,
       serviceTypes: services.types,

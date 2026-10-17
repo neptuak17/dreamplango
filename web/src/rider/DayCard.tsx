@@ -5,6 +5,7 @@
 import type { Place } from "@dpg/contracts";
 import {
   bedsFor,
+  CAPS,
   clock,
   day as dayText,
   dayItems,
@@ -29,23 +30,28 @@ export function Links({ links }: { links: Handoff[] }) {
   if (!links.length) return null;
   return (
     <span className="links">
-      {links.map((l) => (
+      {links
+        .filter((l, i) => links.findIndex((x) => x.url === l.url) === i)
+        .map((l) => (
         <a key={l.url} href={l.url} target="_blank" rel="noreferrer noopener">
           {l.label}
         </a>
-      ))}
+        ))}
     </span>
   );
 }
 
-function ItemList({ items, more, done, onDone, label }: { items: PlanItem[]; more: number; done?: string[]; onDone?: (id: string) => void; label: string }) {
+/** A day's items within the attention budget: `cap` shown, the rest behind "N more" (11.6). */
+function ItemList({ items, cap, done, onDone, label }: { items: PlanItem[]; cap?: number; done?: string[]; onDone?: (id: string) => void; label: string }) {
   const [open, setOpen] = useState(false);
   if (!items.length) return null;
+  const shown = open || cap === undefined ? items : items.slice(0, cap);
+  const more = items.length - shown.length;
   return (
     <div className="item-list">
       <div className="label">{label}</div>
       <ul>
-        {items.map((i) => (
+        {shown.map((i) => (
           <li key={i.id} className={done?.includes(i.id) ? "done" : ""}>
             {onDone && <input type="checkbox" checked={done?.includes(i.id) ?? false} onChange={() => onDone(i.id)} aria-label="Done" />}
             <details>
@@ -90,6 +96,7 @@ function dayPlaces(data: PlanData, d: DayPlan, services: string[], counting = tr
 
 export function DayCard({ plan, data, day: d, free, readOnly, choices, onLockNight, onToggleBooked, onChooseBed, onToggleRest, onDone, onGpx, onClose }: Props) {
   const mine = dayItems(plan.items, d.number);
+  const all = (kind: PlanItem["kind"]) => plan.items.filter((i) => i.day === d.number && i.kind === kind);
   const night = plan.nights.find((n) => n.afterRide === d.ride && d.kind === "ride");
   const kmOf = (m: number) => Math.max(0, (plan.axis.tOf(m) - d.fromT) / 1000);
   const range = d.hoursFast !== d.hoursSlow && Math.abs(d.hoursSlow - d.hoursFast) > 0.05;
@@ -179,10 +186,10 @@ export function DayCard({ plan, data, day: d, free, readOnly, choices, onLockNig
               )}
             </div>
           )}
-          <ItemList label="Your calls" items={mine.calls} more={0} />
-          <ItemList label="Heads-up" items={mine.headsups.shown} more={mine.headsups.more} />
-          <ItemList label="Highlights" items={mine.highlights.shown} more={mine.highlights.more} />
-          <ItemList label="Before you go" items={mine.todos} more={0} done={choices.done} onDone={readOnly ? undefined : onDone} />
+          <ItemList label="Your calls" items={mine.calls} />
+          <ItemList label="Heads-up" items={all("headsup")} cap={CAPS.headsup} />
+          <ItemList label="Highlights" items={all("highlight")} cap={CAPS.highlight} />
+          <ItemList label="Before you go" items={mine.todos} done={choices.done} onDone={readOnly ? undefined : onDone} />
           {night && (
             <div className="sleep">
               <div className="label">Sleep</div>

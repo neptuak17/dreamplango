@@ -160,6 +160,8 @@ export interface PlanItem {
   title: string;
   /** Why it matters to this rider. */
   why: string;
+  /** A name short enough for a bike computer's screen (GPX waypoints). */
+  short?: string;
   /** Higher first: 50+ safety, 40+ a bed or water, 30+ effort, 20+ comfort, 10+ interest. */
   rank: number;
   /** Which of the brief's five questions it answers. */

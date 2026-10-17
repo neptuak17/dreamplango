@@ -165,9 +165,17 @@ Places come from OSM and Overture release 2026-09-23.1. Overture contributes Met
 
 - **Direction in October:** 108 of 152 sections are "either way"; 20 favour riding with the route and 24 against it.
 
-- **Hard breaks** that matchmaker runs can't cross: the 32 km missing link from Monfalcone to Muggia, the ferries from Athens to Türkiye and from Türkiye to Cyprus, and two short missing links in Cyprus.
+- **Hard breaks** that matchmaker runs can't cross: the 32 km missing link from Monfalcone to Muggia, the ferries from Athens to Türkiye and from Türkiye to Cyprus, and two short missing links in Cyprus. (Since M4, D50: missing links count as ridden and no longer end a stretch; see the M4 results.)
 
 - **Acceptance case** ("7 days in October, Moderate, prefers cycle paths, coast and villages, train at both ends"): the top stretch is **Sagunt → Blanes** (sections 30–38). It is 462 km, at 66 km and 418 m of climbing a day, grade 3, with October comfort 82 and best time 84. Its "check yourself" list includes the places to stay that publish no opening season, and the summer school breaks missing from the data.
+
+## M4 Plan results (bundle 2026-10-17)
+
+- **Gaps now typed by evidence only (D50).** The rail-stations rule is gone, so section 60's 45.7 km Ventimiglia → Limone is a missing link, like Monfalcone → Muggia (32 km) and the two short ones in Cyprus. Unfilled gaps no longer end a Dream stretch: they count as ridden, with the terrain unknown. Only the two long sea crossings (Athens → Türkiye, Türkiye → Cyprus) still do.
+- **New files:** 1,950 candidate stops (1,683 named after a town or village), 2,927 highlights (25 UNESCO sites, 1,238 with a Wikipedia or Wikidata link), holiday dates for the 11 countries (none for Cyprus, Greece, Montenegro or Türkiye; Spain's public holidays only for 2026), and day-by-day opening for 12,601 places. The Plan step adds about 22 seconds to the audit.
+- **Acceptance case**, the M3 Dream result (sections 30–38, 7 days in October, Moderate, train at both ends), planned from 15 October 2027: Canet d'en Berenguer → Blanes, 462 km and 3,159 m. Every day is within Moderate (56–78 km, 3 h 25 to 5 h 25 riding), with a town stop each night and a train at both ends (Sagunt, Blanes). Two of six nights rely on beds that publish no October dates. The heads-ups that surface are the steepest 500 m, short busy stretches on the N-340a, C-31 and N-II, steps near Sitges, and the undeveloped EuroVelo stretch south of Tarragona. Planning takes about 0.2 s.
+- **The owner's Pyrenees route** (private), planned whole over 14 days at Challenging: Irun → Portbou, 725 km, 1,000–1,200 m of climbing on most days, with one harder day (Eaux-Bonnes → Marsous). Its heads-ups are mostly busy roads (French départementales rated LTS 4 by the heuristic, D13) and long stretches without a station that carries bikes.
+- **Exports:** starter GPX for every day of both plans (one track per day; gaps would split it), with waypoints for the night, heads-ups and highlights named for a bike computer's screen; calendar files with one event per day, lines folded at 75 bytes. A whole plan's share link is about 1 kB, small enough for a QR code.
 
 ## Consequences for the engine
 

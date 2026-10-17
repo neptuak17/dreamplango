@@ -255,7 +255,7 @@ export function makePlan(data: PlanData, inputs: PlanInputs, choices: PlanChoice
         date,
         afterRide: k + 1,
         stop,
-        locked: locked.get(k) === ci || Boolean(choices.nights),
+        locked: locked.get(k) === ci,
         beds: { count: b.count - b.closed, open: b.open, partly: b.partly, unknown: b.unknown },
         alternatives: alts,
         planB: { before: shift(pb.before), after: shift(pb.after) },

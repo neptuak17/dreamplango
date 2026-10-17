@@ -24,7 +24,7 @@
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @dpg/api\" \"npm run dev -w @dpg/web\"",
     "build": "npm run build -w @dpg/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run engine:test && npm run test -w @dpg/api && npm run test -w @dpg/dream"
+    "test": "npm run engine:test && npm run test -w @dpg/api && npm run test -w @dpg/dream && npm run test -w @dpg/planner"
   },
   "devDependencies": {
     "concurrently": "^10.0.6",

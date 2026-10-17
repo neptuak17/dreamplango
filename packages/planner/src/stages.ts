@@ -186,7 +186,14 @@ export function planStages(ctx: DayContext, rides: number, locked: Map<number, n
   const slow = C.map((c) => slowAt(c.t));
   const totalSlow = slowAt(T);
   const month = (k: number) => monthOf(ctx.dayDate(k));
-  const nc: number[][] = Array.from({ length: nights }, (_, k) => C.map((c) => nightCost(c, ctx.sleep, month(k))));
+  // A night the rider locked is kept even with no bed of their kind (they chose it): flagged, never dropped.
+  const LOCKED_NO_BED = 5;
+  const nc: number[][] = Array.from({ length: nights }, (_, k) =>
+    C.map((c, j) => {
+      const cost = nightCost(c, ctx.sleep, month(k));
+      return !Number.isFinite(cost) && locked.get(k) === j ? LOCKED_NO_BED : cost;
+    }),
+  );
   const cost: number[][] = Array.from({ length: nights }, () => new Array<number>(C.length).fill(Number.POSITIVE_INFINITY));
   const from: number[][] = Array.from({ length: nights }, () => new Array<number>(C.length).fill(-1));
   const dayCache = new Map<string, DayEval>();

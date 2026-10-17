@@ -200,6 +200,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
         fromM: core.axis.mOf(d.fromT + d.steepest.atKm * 1000),
         toM: core.axis.mOf(d.fromT + d.steepest.atKm * 1000 + 500),
         title: `km ${Math.round(d.steepest.atKm)}: 500 m at ${Math.round(d.steepest.grade)}%`,
+        short: `Steep ${Math.round(d.steepest.grade)}%`,
         why: `The steepest part of the day, steep for ${level.name} riders; from a 30 m terrain model, so short ramps can be steeper.`,
         rank: 35,
         topic: "able",
@@ -217,6 +218,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
         fromM: d.fromM,
         toM: d.toM,
         title: `Terrain unknown for ${km(d.unknownKm)} km: climbing and time are minimums`,
+        short: "Terrain unknown",
         why: "The official track is a straight line or a gap there, so nobody has measured the real road (D37).",
         rank: 29,
         topic: "risk",
@@ -238,6 +240,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
           fromM: g.atM,
           toM: g.atM,
           title: `Ferry on day ${d.number}: check its season and times`,
+          short: "Ferry: check times",
           why: `A ${km(g.km)} km crossing at km ${at} of the day; we have no timetables, so it isn't timed.`,
           rank: 38,
           topic: "prepare",
@@ -252,6 +255,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
           fromM: g.atM,
           toM: g.atM,
           title: `Public-transport link on day ${d.number}: check times and bike rules`,
+          short: "Transport link",
           why: `The network advises public transport across ${km(g.km)} km at km ${at} of the day.`,
           rank: 38,
           topic: "prepare",
@@ -266,6 +270,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
           fromM: g.atM,
           toM: g.atM,
           title: `The route has a ${km(g.km)} km gap here, counted as ridden`,
+          short: `Route gap ${km(g.km)} km`,
           why: `At km ${at} of the day the official track stops: no track, ferry or published link. Draw your own line across it in your route tool.`,
           rank: 52,
           topic: "risk",
@@ -439,6 +444,7 @@ export function planItems(data: PlanData, core: PlanCore): PlanItem[] {
 interface FindingRule {
   rank: number;
   title: (f: Finding, len: number) => string;
+  short: (len: number) => string;
   why: string;
   relevant?: (core: PlanCore, f: Finding, len: number) => boolean;
 }
@@ -451,34 +457,40 @@ const FINDING_RULES: Record<string, FindingRule> = {
       const roads = f.title.split(" on ").slice(2).join(" on ");
       return `${km(len)} km on busy roads${roads ? ` (${roads})` : ""}`;
     },
+    short: (len) => `Busy road ${km(len)} km`,
     why: "Fast or heavy traffic and no cycle lane, estimated from the road's class and speed limit.",
     relevant: (core, _f, len) => len >= 1 || core.inputs.avoidBusy,
   },
-  "audit.steps": { rank: 36, title: () => "steps", why: "You'll need to carry or push the bike." },
+  "audit.steps": { rank: 36, title: () => "steps", short: () => "Steps", why: "You'll need to carry or push the bike." },
   "audit.unpaved": {
     rank: 34,
     title: (_f, len) => `${km(len)} km unpaved`,
+    short: (len) => `Unpaved ${km(len)} km`,
     why: "Loose gravel, dirt or sand: slow with a loaded bike, and harder when wet.",
     relevant: (core) => core.inputs.avoidGravel || core.inputs.bike === "road",
   },
   "services.bail_out": {
     rank: 46,
     title: (_f, len) => `${km(len)} km without a station that carries bikes`,
+    short: (len) => `No bike station ${km(len)} km`,
     why: "No station within 10 km of the route where bikes are known to be carried.",
   },
   "eurovelo.undeveloped": {
     rank: 30,
     title: () => "the route is undeveloped here",
+    short: () => "Undeveloped route",
     why: "EuroVelo has no reliable information here, or it isn't developed for cycling: expect no signs, and possibly busy roads.",
   },
   "eurovelo.partially_developed": {
     rank: 20,
     title: () => "the route is partially developed here",
+    short: () => "Partly developed",
     why: "EuroVelo rates it partially developed: expect parts without cycle infrastructure or signs.",
   },
   "audit.unmatched": {
     rank: 31,
     title: (_f, len) => `${km(len)} km where the official track follows no mapped way`,
+    short: (len) => `Off-map track ${km(len)} km`,
     why: "Check the line in your route tool.",
     relevant: (_core, _f, len) => len >= 1,
   },
@@ -508,6 +520,7 @@ function fullRules(data: PlanData, core: PlanCore, add: (i: PlanItem) => void) {
         fromM: lo,
         toM: hi,
         title: `${a === b ? `km ${a}` : `km ${a}–${b}`}: ${rule.title(f, len)}`,
+        short: rule.short(len),
         why: rule.why,
         rank: rule.rank + Math.min(4, len / 5),
         topic: rule.rank >= 45 ? "risk" : "like",
@@ -545,6 +558,7 @@ function fullRules(data: PlanData, core: PlanCore, add: (i: PlanItem) => void) {
           fromM: d.fromM,
           toM: d.toM,
           title: `No ${label} for ${Math.round(worst)} km from km ${Math.round(at)}`,
+          short: `No ${label} ${Math.round(worst)} km`,
           why: `The longest stretch on the day without ${label === "water" ? "water or a shop" : "food"}; you judge what to carry.`,
           rank: 47,
           topic: "risk",
@@ -574,6 +588,7 @@ function fullRules(data: PlanData, core: PlanCore, add: (i: PlanItem) => void) {
           fromM: d.fromM,
           toM: d.toM,
           title: `Day ${d.number} is ${what}: ${open} of the ${known.length} food places with known hours are open`,
+          short: "Food: few open",
           why: "Most places publish no hours; check the ones you count on.",
           rank: 44,
           topic: "risk",
@@ -595,6 +610,7 @@ function fullRules(data: PlanData, core: PlanCore, add: (i: PlanItem) => void) {
         fromM: big.from_m,
         toM: big.to_m,
         title: `The day's big climb: ${km(big.length_m / 1000)} km at ${big.avg_grade.toFixed(1)}% from km ${at}, to ${Math.round(big.top_m)} m`,
+        short: `Climb ${km(big.length_m / 1000)} km ${big.avg_grade.toFixed(1)}%`,
         why: `${Math.round(big.gain_m)} m up; steepest 500 m ${big.max_grade_500m.toFixed(0)}%.`,
         rank: tough ? 33 : 18,
         topic: tough ? "able" : "like",

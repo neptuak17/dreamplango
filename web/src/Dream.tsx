@@ -136,6 +136,7 @@ function RealityCard({
   way,
   month,
   result,
+  planHref,
 }: {
   dream: DreamFile;
   daily: Map<number, DailySection>;
@@ -143,6 +144,8 @@ function RealityCard({
   way: "forward" | "reverse";
   month: number | null;
   result: StretchResult | null;
+  /** Where Plan opens this stretch (M4), when there is a stretch to plan. */
+  planHref?: string | null;
 }) {
   if (!sections.length) return null;
   const first = sections[0]!;
@@ -268,6 +271,11 @@ function RealityCard({
       <div className="teaser">
         {findings} audit findings here{warnings ? ` (${warnings} warnings)` : ""}, plus places, the Ahead list and GPX: the full detail comes with a Trip Pass.
       </div>
+      {planHref && (
+        <a className="plan-link" href={planHref} target="_blank" rel="noreferrer">
+          Plan this stretch ›
+        </a>
+      )}
     </div>
   );
 }
@@ -281,6 +289,7 @@ export function Dream({
   onSelectSection,
   result,
   onResult,
+  routeKey,
 }: {
   dream: DreamFile;
   daily: DailySection[];
@@ -290,6 +299,8 @@ export function Dream({
   onSelectSection: (n: number | null) => void;
   result: StretchResult | null;
   onResult: (r: StretchResult | null) => void;
+  /** The route, for the link that opens a stretch in Plan (M4). */
+  routeKey?: string;
 }) {
   const [query, setQuery] = useState<Omit<DreamQuery, "month">>({
     level: 3,
@@ -315,7 +326,30 @@ export function Dream({
   return (
     <div className="dream">
       {shown.length > 0 && (
-        <RealityCard dream={dream} daily={byNumber} sections={shown} way={result?.way ?? "forward"} month={month} result={result} />
+        <RealityCard
+          dream={dream}
+          daily={byNumber}
+          sections={shown}
+          way={result?.way ?? "forward"}
+          month={month}
+          result={result}
+          planHref={
+            routeKey && shown.length
+              ? `/plan?${new URLSearchParams({
+                  route: routeKey,
+                  first: String(shown[0]!.number),
+                  last: String(shown[shown.length - 1]!.number),
+                  way: result?.way ?? "forward",
+                  days: String(result?.days ?? query.days),
+                  month: String(month ?? result?.month ?? ""),
+                  level: String(query.level),
+                  gravel: query.surfaces.gravel,
+                  busy: query.avoidBusy ? "1" : "0",
+                  stay: query.stay,
+                })}`
+              : null
+          }
+        />
       )}
 
       <details className="dream-block" open>

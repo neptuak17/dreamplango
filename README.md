@@ -4,8 +4,8 @@
 
 Route audits and Dream–Plan–Go trip support for long-distance cycle routes, starting with EuroVelo 8. Design, decisions and roadmap: [docs/DESIGN.md](docs/DESIGN.md).
 
-**Status:** milestone M3.5 (audits of your own GPX files). The engine matches the official EV8 track, or a route file of your own, to OpenStreetMap and produces several layers. A local API serves the results, and a web viewer shows them on a map and in a strip diagram.
-- Layers (M1): infrastructure, surface, traffic stress, waymarked network, gradient, typed gaps (ferry, rail link, missing), climbs and an indicative ECS-style check.
+**Status:** milestone M4 (Plan). The engine matches the official EV8 track, or a route file of your own, to OpenStreetMap and produces several layers. A local API serves the results; the audit viewer shows them on a map and in a strip diagram, and a separate rider view turns a stretch into a plan.
+- Layers (M1): infrastructure, surface, traffic stress, waymarked network, gradient, typed gaps (ferry, published transport link, missing), climbs and an indicative ECS-style check.
 - Services (M2):
   - places from OSM and Overture (water, food, toilets, accommodation, bike shops, repair stations, stations, pharmacies, ATMs, hospitals), each with its ridden detour from the route and its season by month;
   - stations with a curated bike-carriage policy;
@@ -16,6 +16,11 @@ Route audits and Dream–Plan–Go trip support for long-distance cycle routes, 
   - simple comfort, best-time and direction scores, with "no data" shown honestly;
   - in the viewer, a Dream tab: a trip finder for your level, days, surfaces and themes, a best-time heatmap, and a reality-check card.
 - Your own routes (M3.5): the same audit on a GPX file you supply, as a private route. It is split into stages of about 60 km; its waypoints are shown but never counted, and any length it shares with EV8 is reported.
+- Plan (M4), the rider view at `http://localhost:5173/plan` (or "Plan this stretch" in the Dream tab):
+  - days timed in hours from your level and bike, a stop each night in a town, and the few things that need your call;
+  - a trip brief in five lines, day cards with water and food, heads-ups, highlights, beds with their own links and a plan B;
+  - a to-do list, starter GPX per day (gaps marked; Kilometrica doesn't build your final route), a calendar file, a printable trip book, share links and a QR code for your phone, with no accounts;
+  - a prototype switch between the free teaser and the Trip Pass view.
 
 ## Layout
 
@@ -28,6 +33,7 @@ Route audits and Dream–Plan–Go trip support for long-distance cycle routes, 
 | `web/` | Prototype viewer (Vite + React + MapLibre) |
 | `packages/contracts/` | TypeScript types generated from `schemas/` |
 | `packages/dream/` | The Dream matchmaker (TypeScript), shared by the viewer and later the app |
+| `packages/planner/` | Plan (TypeScript, pure): pace model, stage planner, plan items, plan document, share links, exports |
 | `schemas/` | JSON Schema of the bundle format (generated from the engine's models) |
 | `docs/` | Design, data-licence register, setup guides, notes |
 
@@ -51,7 +57,7 @@ npm run fetch:ev8      # official EV8 GPX
 npm run osm:ev8        # download OSM country extracts (~10.6 GB) and cut the 15 km corridor
 npm run valhalla:up    # start Valhalla; the first start builds routing tiles from the corridor
 npm run audit:ev8      # match, layers, terrain, services, Dream data (ERA5 needs ~/.cdsapirc), rules -> bundle
-npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhost:5173
+npm run dev            # API on http://127.0.0.1:8787, viewer on http://localhost:5173, rider view on /plan
 ```
 
 `npm run ingest:ev8` still builds a quick geometry-only bundle without OSM, Valhalla or the DEM.

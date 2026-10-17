@@ -9,7 +9,6 @@
 import type { RouteListing } from "../api";
 import { listRoutes, loadManifest, listingOf } from "../api";
 import {
-  addDays,
   calendarFile,
   choicesOf,
   dayGpx,
@@ -109,8 +108,10 @@ function readStart(): { start: Start | null; itinerary: Itinerary | null; error:
 
 function initialInputs(files: RouteFiles, s: Start["inputs"]): { inputs: PlanInputs; suggested: number | null } {
   const daily = [...files.sections.daily].sort((a, b) => a.from_m - b.from_m);
+  // A rider's own route is planned whole by default; a network route from its first week of sections.
+  const own = files.manifest.visibility === "private";
   const first = daily.find((d) => d.number === s.first) ?? daily[0]!;
-  const last = daily.find((d) => d.number === s.last) ?? daily[Math.min(daily.length - 1, 6)]!;
+  const last = daily.find((d) => d.number === s.last) ?? daily[own ? daily.length - 1 : Math.min(daily.length - 1, 6)]!;
   const year = files.free.dream.season_year;
   const month = s.month ?? null;
   const startDate = s.startDate ?? `${year}-${String((month ?? 8) + 1).padStart(2, "0")}-15`;
@@ -454,6 +455,7 @@ function PlanPage({ start }: { start: Start }) {
         <label className="pass" title="Prototype switch: the teaser shows the outline only (D45)">
           <input
             type="checkbox"
+            aria-label="Trip Pass (prototype switch)"
             checked={pass}
             onChange={(e) => {
               setPass(e.target.checked);
@@ -505,7 +507,8 @@ function PlanPage({ start }: { start: Start }) {
             </section>
           ) : (
             <div className="answers">
-              {dayText(inputs.startDate)} · {inputs.days} riding days · level {inputs.level} · {inputs.sleep} · {inputs.bike}
+              {dayText(inputs.startDate)} · {inputs.days} riding days · {data.dream.levels.find((l) => l.level === inputs.level)?.name ?? `level ${inputs.level}`} ·{" "}
+              {inputs.sleep === "mix" ? "rooms or camping" : inputs.sleep} · {inputs.bike === "ebike" ? "e-bike" : `${inputs.bike} bike`}
               {!readOnly && (
                 <button type="button" className="link" onClick={() => setEditing(true)}>
                   Change
@@ -513,7 +516,7 @@ function PlanPage({ start }: { start: Start }) {
               )}
             </div>
           )}
-          <Brief plan={plan} onLine={() => setSelected(null)} />
+          <Brief plan={plan} free={free} onLine={() => setSelected(null)} />
           <EffortChart plan={plan} selected={selected} onPick={setSelected} />
           <Calls calls={calls} free={free} readOnly={readOnly} onOption={onOption} />
           <section className="days">
@@ -534,7 +537,16 @@ function PlanPage({ start }: { start: Start }) {
             <section className="pin">
               <button
                 type="button"
-                onClick={() => setPinned((p) => [...p.slice(-1), { label: `Plan ${String.fromCharCode(65 + p.length)}: ${inputs.days} days, ${inputs.sleep}`, inputs, choices }])}
+                onClick={() =>
+                  setPinned((p) => [
+                    ...p.slice(-1),
+                    {
+                      label: `Plan ${String.fromCharCode(65 + p.length)}: ${inputs.days} days, ${inputs.sleep === "mix" ? "rooms or camping" : inputs.sleep}`,
+                      inputs,
+                      choices,
+                    },
+                  ])
+                }
               >
                 Pin this plan to compare
               </button>
@@ -595,7 +607,7 @@ function PlanPage({ start }: { start: Start }) {
         </section>
       </div>
       <footer className="rider-foot muted small">
-        Ends {dayText(addDays(plan.endDate, 0))}. Kilometrica doesn't navigate or book: it hands you to the apps and sites that do.
+        Ends {dayText(plan.endDate)}. Kilometrica doesn't navigate or book: it hands you to the apps and sites that do.
       </footer>
     </div>
   );
@@ -603,6 +615,9 @@ function PlanPage({ start }: { start: Start }) {
 
 export function RiderApp() {
   const [{ start, itinerary, error }] = useState(readStart);
+  useEffect(() => {
+    if (!start) document.title = itinerary ? `${itinerary.name} · Kilometrica` : "Kilometrica Plan";
+  }, [start, itinerary]);
   if (error) return <div className="rider center error">{error}</div>;
   if (itinerary) return <ItineraryView it={itinerary} />;
   if (!start) return <StartPage />;
