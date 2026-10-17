@@ -1210,6 +1210,15 @@ Ranking and the caps come after the rules. The rider can tick a to-do as done, o
 
 **Sharing without accounts (9.4, D48).** On a public route, the plan document is a few kilobytes. Compressed, it fits in the link's fragment (after `#`), which browsers never send to a server: the link *is* the plan, and nothing is stored anywhere. Anyone holding the link can read it. A link has one of two levels: the full plan, or the itinerary only. Someone without a Trip Pass sees the plan as shared, but needs their own pass to change it. The same link is how a rider moves a plan from the web to their phone. A plan on a private route (D25) can't travel that way, because the recipient would also need the route. For now it is shared as a file (route plus plan), and later as an end-to-end encrypted blob (9.4).
 
+#### Ready for the assistant (D38)
+
+Each phase will later get a small, local, open-weight assistant, grounded only in our data and the rider's plan (D38). M4 builds Plan so it can be added without rework:
+- **The planner's functions are the assistant's tools.** They are pure and typed, so each can be exposed as a tool as it is: summarise the plan, a day's details, the items on a day or a km range, why a stop was chosen, a night's alternatives, and "what if" re-plans (a day more, rooms instead of camping, other dates) that return the changed plan without saving it.
+- **Every item carries its evidence** (finding, place and event ids, source and date), so an answer can cite it, and D38's honesty check (every number must come from a tool result) can be run against it.
+- **Text comes from templates over the data,** never from free generation. The assistant may rephrase it later, under the same rule.
+- **Everything stays on the device:** the plan, the inputs, and any question asked about them (D38, principle 5).
+- **Nothing depends on the assistant.** It is never the only way to see or change anything.
+
 #### Where it runs, and privacy
 
 - **`packages/planner`** (TypeScript, pure, 6.5) holds the pace model, the stage planner, the plan rules, the plan document, share links and exports. It has no network access: it takes bundle data and the rider's inputs, and returns a plan. It runs in the browser (website, prototype, partner widget) and, probably, in the iOS app (D48).
